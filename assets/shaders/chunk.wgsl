@@ -85,7 +85,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let z = f32(vertex.vert_data >> 12u & x_positive_bits(6u));
     let ao = vertex.vert_data >> 18u & x_positive_bits(3u);
     let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
-    let block_index = vertex.vert_data >> 25u & x_positive_bits(7u);
+    let block_index = vertex.vert_data >> 24u & x_positive_bits(8u);
 
     let local_position = vec4<f32>(x,y,z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;

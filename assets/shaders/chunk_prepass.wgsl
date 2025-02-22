@@ -59,16 +59,11 @@ var<private> normals: array<vec3<f32>,6> = array<vec3<f32>,6> (
 fn vertex(vertex: Vertex) -> MyVertexOutput {
     var out: MyVertexOutput;
 
-    let x = f32((vertex.vert_data & 63u));
-    let y = f32((vertex.vert_data & 4032u) >> 6u);
-    let z = f32((vertex.vert_data & 258048u) >> 12u);
-    let ao = u32((vertex.vert_data & (3u << 18u)) >> 18u);
+    let x = f32(vertex.vert_data & x_positive_bits(6u));
+    let y = f32(vertex.vert_data >> 6u & x_positive_bits(6u));
+    let z = f32(vertex.vert_data >> 12u & x_positive_bits(6u));
+    let ao = vertex.vert_data >> 18u & x_positive_bits(3u);
     let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
-
-
-    // let ambient_lerp = ambient_lerps[ao];
-    // out.ambient = ambient_lerp;
-    // out.blend_color = vec3<f32>(1.0,0.0,0.0);
 
     let normal = normals[normal_index];
     // out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);

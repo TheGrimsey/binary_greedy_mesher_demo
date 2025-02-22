@@ -64,8 +64,12 @@ pub fn get_edging_chunk(pos: IVec3) -> Option<IVec3> {
     }
 }
 
-// pos 18 bits, ao 3 bits, normal 4 bits
-// 18-21-25-   left 32-25 = 7
+/// Vertex format:
+/// position: 6 bits each, 18 bits total
+/// ao: 3 bits
+/// normal: 3 bits (Original comment said 4 but shader only uses 3?)
+/// block type: 8 bits (256 block types max :/)
+/// total: 32 bits
 #[inline]
 pub fn make_vertex_u32(
     // position: [i32; 3], /*, normal: i32, color: Color, texture_id: u32*/
@@ -79,7 +83,7 @@ pub fn make_vertex_u32(
         | (pos.z as u32) << 12u32
         | ao << 18u32
         | normal << 21u32
-        | block_type << 25u32
+        | block_type << 24u32
     // | (normal as u32) << 18u32
     // | (texture_id) << 21u32
 }
@@ -94,8 +98,8 @@ pub fn world_to_chunk(pos: Vec3) -> IVec3 {
 #[inline]
 pub fn generate_indices(vertex_count: usize) -> Vec<u32> {
     let indices_count = vertex_count / 4;
-    let mut indices = Vec::<u32>::with_capacity(indices_count);
-    (0..indices_count).into_iter().for_each(|vert_index| {
+    let mut indices = Vec::<u32>::with_capacity(indices_count * 6);
+    (0..indices_count).for_each(|vert_index| {
         let vert_index = vert_index as u32 * 4u32;
         indices.push(vert_index);
         indices.push(vert_index + 1);
@@ -104,6 +108,7 @@ pub fn generate_indices(vertex_count: usize) -> Vec<u32> {
         indices.push(vert_index + 2);
         indices.push(vert_index + 3);
     });
+
     indices
 }
 
@@ -124,11 +129,7 @@ fn index_functions() {
 #[inline]
 pub fn vec3_to_index(pos: IVec3, bounds: i32) -> usize {
     let x_i = pos.x % bounds;
-    // let y_i = (pos.y * bounds) % bounds;
-    let y_i = (pos.y * bounds);
+    let y_i = pos.y * bounds;
     let z_i = pos.z * (bounds * bounds);
-    // let x_i = pos.x % bounds;
-    // let y_i = (pos.y / bounds) % bounds;
-    // let z_i = pos.z / (bounds * bounds);
     (x_i + y_i + z_i) as usize
 }

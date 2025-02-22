@@ -38,7 +38,6 @@ fn initialize_global_chunk_materials(
     block_registry: Res<BlockRegistryResource>,
 ) {
     let colors = block_registry.0.block_color.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
-    info!("Block colors: {:?}", colors);
 
     let colors = buffers.add(ShaderStorageBuffer::from(colors));
 
