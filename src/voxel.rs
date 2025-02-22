@@ -64,6 +64,7 @@ impl BlockRegistry {
         
         self.block_id_to_string_identifier.push(identifier.clone());
         self.block_flags.push(flags); 
+        self.block_color.push(block.color);
 
         self.block_string_identifier_to_id.insert(identifier, block_id);
 

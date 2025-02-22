@@ -30,18 +30,18 @@ struct ChunkMaterial {
 };
 
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
+@group(2) @binding(1) var<storage, read> block_color: array<vec4<f32>>;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
     @location(0) vert_data: u32,
-    // @location(1) blend_color: vec4<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
-    @location(2) blend_color: vec3<f32>,
+    @location(2) blend_color: vec4<f32>,
     @location(3) ambient: f32,
     @location(4) instance_index: u32,
 };
@@ -65,11 +65,11 @@ var<private> normals: array<vec3<f32>,6> = array<vec3<f32>,6> (
 	vec3<f32>(0.0, 0.0, 1.0) // Back
 );
 
-var<private> block_color: array<vec3<f32>,3> = array<vec3<f32>,3> (
+/*var<private> block_color: array<vec3<f32>,3> = array<vec3<f32>,3> (
 	vec3<f32>(0.0, 0.0, 0.0), // air
 	vec3<f32>(0.0, 1.0, 0.0), // grass
 	vec3<f32>(0.3, 0.4, 0.0), // dirt
-);
+);*/
 
 
 fn x_positive_bits(bits: u32) -> u32{
@@ -86,7 +86,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let ao = vertex.vert_data >> 18u & x_positive_bits(3u);
     let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
     let block_index = vertex.vert_data >> 25u & x_positive_bits(7u);
-    // let normal_index: u32 = (vertex.v_pos_6b_normal_3b_texid_8b & 1835008u) >> 18u;
 
     let local_position = vec4<f32>(x,y,z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;
@@ -98,7 +97,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let ambient_lerp = ambient_lerps[ao];
     out.ambient = ambient_lerp;
     out.world_position = world_position;
-    // out.world_normal = vec3<f32>(0.0,1.0,0.0);
+    
 
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
@@ -107,36 +106,18 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var noise = simplexNoise2(vec2<f32>(world_position.x*s, world_position.z*s));
     var k = simplexNoise2(vec2<f32>(world_position.x*s, world_position.z*s));
 
-    // let high = vec3<f32>(0.15, 1.0, 0.2);
-    // let low = vec3<f32>(0.8, 1.0, 0.45);
     let high = vec3<f32>(9.00, 6.0, 0.0);
     let low = vec3<f32>(0.8, 1.0, 0.40);
-    // let low = vec3<f32>(1.0, 0.0, 0.05);
-    // let h = (out.world_position.y) / 32.0;
+    
     noise = (out.world_position.y) / 30.0;
-    // noise += k*0.2;
-    // noise = smoothstep(0.4, 1.0, noise);
-    // noise = 0.0;
-    // noise += h;
-    // noise *= noise;
 
-    // noise = max(noise, 0.00);
-    // noise = 0.0;
-
-    // out.blend_color = (low * noise) + (high * (1.0-noise));
     let fun = (low * noise) + (high * (1.0-noise));
     out.blend_color = block_color[block_index];
     out.instance_index = vertex.instance_index;
     return out;
 }
 
-// struct FragmentInput {
-//     @location(0) blend_color: vec4<f32>,
-// };
-
 @fragment
-// fn fragment(input: FragmentInput) -> @location(0) vec4<f32> {
-// fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
 fn fragment(input: VertexOutput) -> FragmentOutput {
     var pbr_input = pbr_input_new();
 
@@ -157,12 +138,11 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    pbr_input.material.base_color = vec4<f32>(input.blend_color * input.ambient, 1.0);
+    pbr_input.material.base_color = vec4<f32>(input.blend_color.xyz * input.ambient, input.blend_color.w);
 
     pbr_input.material.reflectance = chunk_material.reflectance;
     pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;
     pbr_input.material.metallic = chunk_material.metallic;
-    // pbr_input.material.metallic = 1.0;
 
 
 #ifdef PREPASS_PIPELINE
@@ -176,9 +156,6 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #endif
 
     return out;
-   // return vec4<f32>(input.blend_color, 1.0);
-    // return vec4<f32>(input.blend_color * input.ambient, 1.0);
-    // return vec4<f32>(1.0, 0.0,0.0,1.0);
 }
 
 //  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket, Johan Helsing

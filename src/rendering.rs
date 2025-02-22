@@ -6,9 +6,11 @@ use bevy::{
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
             SpecializedMeshPipelineError, VertexFormat,
-        },
+        }, storage::ShaderStorageBuffer,
     },
 };
+
+use crate::voxel::BlockRegistryResource;
 
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
@@ -23,8 +25,31 @@ impl Plugin for RenderingPlugin {
         app.add_plugins(MaterialPlugin::<ChunkMaterial>::default());
         app.add_plugins(MaterialPlugin::<ChunkMaterialWireframe>::default());
         app.insert_resource(ChunkMaterialWireframeMode::Off);
+
+        app.add_systems(Startup, initialize_global_chunk_materials);
         app.add_systems(Update, apply_chunk_material);
     }
+}
+
+fn initialize_global_chunk_materials(
+    mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    mut chunk_materials: ResMut<Assets<ChunkMaterial>>,
+    mut commands: Commands,
+    block_registry: Res<BlockRegistryResource>,
+) {
+    let colors = block_registry.0.block_color.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
+    info!("Block colors: {:?}", colors);
+
+    let colors = buffers.add(ShaderStorageBuffer::from(colors));
+
+    // TODO: Add transparent material.
+    
+    commands.insert_resource(GlobalChunkMaterial(chunk_materials.add(ChunkMaterial {
+        reflectance: 0.5,
+        perceptual_roughness: 1.0,
+        metallic: 0.01,
+        block_colors: colors.clone(),
+    })));
 }
 
 fn apply_chunk_material(
@@ -83,6 +108,9 @@ pub struct ChunkMaterial {
     pub perceptual_roughness: f32,
     #[uniform(0)]
     pub metallic: f32,
+
+    #[storage(1,read_only)]
+    pub block_colors: Handle<ShaderStorageBuffer>,
 }
 
 impl Material for ChunkMaterial {

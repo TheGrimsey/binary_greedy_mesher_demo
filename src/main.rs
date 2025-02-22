@@ -97,7 +97,6 @@ pub fn modify_current_terrain(
 
 pub fn setup(
     mut commands: Commands,
-    mut chunk_materials: ResMut<Assets<ChunkMaterial>>,
     mut chunk_materials_wireframe: ResMut<Assets<ChunkMaterialWireframe>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -142,11 +141,6 @@ pub fn setup(
         ))
         .insert(FlyCam);
 
-    commands.insert_resource(GlobalChunkMaterial(chunk_materials.add(ChunkMaterial {
-        reflectance: 0.5,
-        perceptual_roughness: 1.0,
-        metallic: 0.01,
-    })));
     commands.insert_resource(GlobalChunkWireframeMaterial(chunk_materials_wireframe.add(
         ChunkMaterialWireframe {
             reflectance: 0.5,
