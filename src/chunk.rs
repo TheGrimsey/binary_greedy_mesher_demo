@@ -72,7 +72,7 @@ impl ChunkData {
                     true => BlockId(1),
                     false => BlockId(2),
                 },
-                false =>  if voxel_pos.y == 20 { BlockId(3) } else { BlockId(0) },
+                false =>  if voxel_pos.x == 20 { BlockId(3) } else { BlockId(0) },
             };
             voxels.push(BlockData { block_type });
         }

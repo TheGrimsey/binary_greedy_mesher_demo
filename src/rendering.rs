@@ -56,7 +56,7 @@ fn initialize_global_chunk_materials(
             perceptual_roughness: 1.0,
             metallic: 0.01,
             block_colors: colors.clone(),
-            alpha_mode: AlphaMode::Blend
+            alpha_mode: AlphaMode::Premultiplied
         }),   
     });
 }

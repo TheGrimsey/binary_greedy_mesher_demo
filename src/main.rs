@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use bevy::{
-    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
+    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
         settings::{RenderCreation, WgpuFeatures, WgpuSettings},
         RenderPlugin,
     }
@@ -134,10 +134,10 @@ pub fn setup(
     commands
         .spawn((
             Scanner::new(12),
-            Camera3dBundle {
-                transform: Transform::from_xyz(0.0, 2.0, 0.5),
-                ..default()
-            },
+            Camera3d::default(),
+            Transform::from_xyz(0.0, 2.0, 0.5),
+            Msaa::Off,
+            //OrderIndependentTransparencySettings::default()
         ))
         .insert(FlyCam);
 
