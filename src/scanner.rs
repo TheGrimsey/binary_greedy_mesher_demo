@@ -28,18 +28,18 @@ impl Plugin for ScannerPlugin {
     }
 }
 
-///! scanner is responsible for identifying what chunks needs to be loaded (mesh/data)
-///! the current implementation is exellent for low render distances, 1-15
-///! but anything above that might induce some frame lag, due to how the load/unload data is calculated.  
-///! scanner::new() can also be very slow on high render distances, giving an initial slow execution time.
+/// scanner is responsible for identifying what chunks needs to be loaded (mesh/data)
+/// the current implementation is exellent for low render distances, 1-15
+/// but anything above that might induce some frame lag, due to how the load/unload data is calculated.  
+/// scanner::new() can also be very slow on high render distances, giving an initial slow execution time.
 #[derive(Component)]
 pub struct Scanner {
     pub prev_chunk_pos: IVec3,
-    ///! how many chunks we visit
+    /// how many chunks we visit
     pub checks_per_frame: usize,
-    ///! offset grid sampling over frames
+    /// offset grid sampling over frames
     pub data_offset: usize,
-    ///! offset grid sampling over frames
+    /// offset grid sampling over frames
     pub mesh_offset: usize,
 
     // chunk positions we are yet to check we need need to load
@@ -57,8 +57,8 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    ///! construct scanner, chunk offsets are based on distance
-    ///! warning: slow execution time on distances above 15-20,
+    /// construct scanner, chunk offsets are based on distance
+    /// warning: slow execution time on distances above 15-20,
     pub fn new(distance: i32) -> Self {
         let data_distance = distance + 1;
         let mesh_distance = distance;
@@ -79,7 +79,7 @@ impl Scanner {
     }
 }
 
-///! on scanner chunk change, enqueue chunks to load/unload
+/// on scanner chunk change, enqueue chunks to load/unload
 fn detect_move(
     mut scanners: Query<(&mut Scanner, &GlobalTransform)>,
     mut voxel_engine: ResMut<VoxelEngine>,
@@ -178,7 +178,7 @@ fn detect_move(
     }
 }
 
-///! constructs spherical positions with the provided chunk radius
+/// constructs spherical positions with the provided chunk radius
 fn make_offset_vec(half: i32) -> Vec<IVec3> {
     let k = (half * 2) + 1;
     let mut sampling_offsets = vec![];

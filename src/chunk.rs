@@ -31,7 +31,7 @@ impl ChunkData {
         }
     }
 
-    ///! shape our voxel data based on the chunk_pos
+    /// shape our voxel data based on the chunk_pos
     pub fn generate(chunk_pos: IVec3) -> Self {
         // hardcoded extremity check
         if chunk_pos.y * 32 + 32 > 21 + 32 {

@@ -33,10 +33,8 @@ pub const MAX_MESH_TASKS: usize = 32;
 
 impl Plugin for VoxelEnginePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(VoxelEngine::default());
-        // app.add_systems(Update, (start_data_tasks, start_mesh_tasks));
+        app.init_resource::<VoxelEngine>();
         app.add_systems(PostUpdate, (start_data_tasks, start_mesh_tasks));
-        // app.add_systems(PostUpdate, (join_data, join_mesh));
         app.add_systems(Update, start_modifications);
         app.add_systems(
             // PostUpdate,
@@ -62,7 +60,7 @@ pub enum MeshingMethod {
     BinaryGreedyMeshing,
 }
 
-///! holds all voxel world data
+/// holds all voxel world data
 #[derive(Resource)]
 pub struct VoxelEngine {
     pub world_data: HashMap<IVec3, Arc<ChunkData>>,
@@ -72,7 +70,6 @@ pub struct VoxelEngine {
     pub unload_data_queue: Vec<IVec3>,
     pub unload_mesh_queue: Vec<IVec3>,
     pub data_tasks: HashMap<IVec3, Option<Task<ChunkData>>>,
-    // pub mesh_tasks: HashMap<IVec3, Option<Task<Option<ChunkMesh>>>>,
     pub mesh_tasks: Vec<(IVec3, Option<Task<Option<ChunkMesh>>>)>,
     pub chunk_entities: HashMap<IVec3, Entity>,
     pub lod: Lod,
@@ -171,10 +168,8 @@ impl Default for VoxelEngine {
             unload_mesh_queue: Vec::new(),
             data_tasks: HashMap::new(),
             mesh_tasks: Vec::new(),
-            // mesh_tasks: HashMap::new(),
             chunk_entities: HashMap::new(),
             lod: Lod::L32,
-            // meshing_method: MeshingMethod::VertexCulled,
             meshing_method: MeshingMethod::BinaryGreedyMeshing,
             vertex_diagnostic: HashMap::new(),
             chunk_modifications: HashMap::new(),
@@ -182,7 +177,7 @@ impl Default for VoxelEngine {
     }
 }
 
-///! begin data building tasks for chunks in range
+/// begin data building tasks for chunks in range
 pub fn start_data_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
     scanners: Query<&GlobalTransform, With<Scanner>>,
@@ -206,18 +201,15 @@ pub fn start_data_tasks(
         .min(load_data_queue.len() as i32)
         .max(0) as usize;
     for world_pos in load_data_queue.drain(0..tasks_left) {
-        // for world_pos in load_data_queue.drain(0..MAX_DATA_TASKS.min(load_data_queue.len())) {
-        // for world_pos in load_data_queue.drain(..) {
         let k = world_pos;
         let task = task_pool.spawn(async move {
-            let cd = ChunkData::generate(k);
-            cd
+            ChunkData::generate(k)
         });
         data_tasks.insert(world_pos, Some(task));
     }
 }
 
-///! destroy enqueued, chunk data
+/// destroy enqueued, chunk data
 pub fn unload_data(mut voxel_engine: ResMut<VoxelEngine>) {
     let VoxelEngine {
         unload_data_queue,
@@ -229,7 +221,7 @@ pub fn unload_data(mut voxel_engine: ResMut<VoxelEngine>) {
     }
 }
 
-///! destroy enqueued, chunk mesh entities
+/// destroy enqueued, chunk mesh entities
 pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>) {
     let VoxelEngine {
         unload_mesh_queue,
@@ -251,7 +243,7 @@ pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>
     unload_mesh_queue.append(&mut retry);
 }
 
-///! begin mesh building tasks for chunks in range
+/// begin mesh building tasks for chunks in range
 pub fn start_mesh_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
     scanners: Query<&GlobalTransform, With<Scanner>>,
@@ -333,7 +325,7 @@ pub fn start_modifications(mut voxel_engine: ResMut<VoxelEngine>) {
     }
 }
 
-///! join the chunkdata threads
+/// join the chunkdata threads
 pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>) {
     let VoxelEngine {
         world_data,
@@ -385,7 +377,7 @@ pub fn promote_dirty_meshes(
     }
 }
 
-///! join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
+/// join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
 pub fn join_mesh(
     mut voxel_engine: ResMut<VoxelEngine>,
     mut commands: Commands,

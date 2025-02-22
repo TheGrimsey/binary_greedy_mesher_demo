@@ -1,4 +1,4 @@
-///! gpu ready mesh payload
+/// gpu ready mesh payload
 #[derive(Default)]
 pub struct ChunkMesh {
     pub indices: Vec<u32>,
