@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bevy::{
-    asset::LoadState,
     diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, RegisterDiagnostic},
     prelude::*,
     render::{
@@ -19,10 +18,10 @@ use crate::{
     chunks_refs::ChunksRefs,
     constants::CHUNK_SIZE_I32,
     lod::Lod,
-    rendering::{GlobalChunkMaterial, ATTRIBUTE_VOXEL},
+    rendering::{ChunkEntityType, GlobalChunkMaterial, ATTRIBUTE_VOXEL},
     scanner::Scanner,
     utils::{get_edging_chunk, vec3_to_index},
-    voxel::{load_block_registry, BlockData, BlockId, BlockRegistryResource},
+    voxel::{load_block_registry, BlockData, BlockFlags, BlockId, BlockRegistryResource},
 };
 use futures_lite::future;
 
@@ -70,7 +69,7 @@ pub struct VoxelEngine {
     pub unload_data_queue: Vec<IVec3>,
     pub unload_mesh_queue: Vec<IVec3>,
     pub data_tasks: HashMap<IVec3, Option<Task<ChunkData>>>,
-    pub mesh_tasks: Vec<(IVec3, Option<Task<Option<ChunkMesh>>>)>,
+    pub mesh_tasks: Vec<(IVec3, Option<Task<MeshTask>>)>,
     pub chunk_entities: HashMap<IVec3, Entity>,
     pub lod: Lod,
     pub meshing_method: MeshingMethod,
@@ -146,14 +145,12 @@ impl VoxelEngine {
     pub fn unload_all_meshes(&mut self, scanner: &Scanner, scanner_transform: &GlobalTransform) {
         // stop all any current proccessing
         self.load_mesh_queue.clear();
-        // self.unload_mesh_queue.clear();
         self.mesh_tasks.clear();
         let scan_pos =
             ((scanner_transform.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
         for offset in &scanner.mesh_sampling_offsets {
             let wpos = scan_pos + *offset;
             self.load_mesh_queue.push(wpos);
-            // self.unload_mesh_queue.push(wpos);
         }
     }
 }
@@ -197,9 +194,7 @@ pub fn start_data_tasks(
             .cmp(&b.distance_squared(scan_pos))
     });
 
-    let tasks_left = (MAX_DATA_TASKS as i32 - data_tasks.len() as i32)
-        .min(load_data_queue.len() as i32)
-        .max(0) as usize;
+    let tasks_left = MAX_DATA_TASKS.saturating_sub(data_tasks.len()).min(load_data_queue.len());
     for world_pos in load_data_queue.drain(0..tasks_left) {
         let k = world_pos;
         let task = task_pool.spawn(async move {
@@ -243,6 +238,11 @@ pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>
     unload_mesh_queue.append(&mut retry);
 }
 
+pub struct MeshTask {
+    opaque: Option<ChunkMesh>,
+    transparent: Option<ChunkMesh>,
+}
+
 /// begin mesh building tasks for chunks in range
 pub fn start_mesh_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
@@ -279,7 +279,10 @@ pub fn start_mesh_tasks(
         let block_registry = block_registry.0.clone();
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
-                crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry)
+                MeshTask {
+                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID),
+                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT)
+                }
             }),
         };
 
@@ -348,35 +351,6 @@ pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>) {
     data_tasks.retain(|_k, op| op.is_some());
 }
 
-#[derive(Component)]
-pub struct WaitingToLoadMeshTag;
-
-pub fn promote_dirty_meshes(
-    mut commands: Commands,
-    children: Query<(Entity, &Mesh3d, &Parent), With<WaitingToLoadMeshTag>>,
-    mut parents: Query<&mut Mesh3d, Without<WaitingToLoadMeshTag>>,
-    asset_server: Res<AssetServer>,
-) {
-    for (entity, mesh, parent) in children.iter() {
-        if let Some(state) = asset_server.get_load_state(mesh.id()) {
-            match state {
-                LoadState::Loaded | LoadState::Failed(_) => {
-                    let Ok(mut parent_handle) = parents.get_mut(parent.get()) else {
-                        continue;
-                    };
-                    info!("updgraded!");
-                    *parent_handle = mesh.clone();
-                    commands.entity(entity).despawn();
-                }
-                LoadState::Loading => {
-                    info!("loading cool");
-                }
-                _ => (),
-            }
-        }
-    }
-}
-
 /// join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
 pub fn join_mesh(
     mut voxel_engine: ResMut<VoxelEngine>,
@@ -396,39 +370,70 @@ pub fn join_mesh(
             warn!("someone modified task?");
             continue;
         };
-        let Some(chunk_mesh_option) = block_on(future::poll_once(&mut task)) else {
+        let Some(mut chunk_mesh_task) = block_on(future::poll_once(&mut task)) else {
             // failed polling, keep task alive
             *task_option = Some(task);
             continue;
         };
-
-        let Some(mesh) = chunk_mesh_option else {
-            continue;
-        };
-        let mut bevy_mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-        vertex_diagnostic.insert(*world_pos, mesh.vertices.len() as i32);
-        bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices.clone());
-        bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone()));
-        let mesh_handle = meshes.add(bevy_mesh);
-
-        if let Some(entity) = chunk_entities.get(world_pos) {
-            commands.entity(*entity).despawn();
+        
+        // Despawn the old chunk entity if it exists.
+        // Checking before we check the mesh because we may not get a mesh.
+        if let Some(entity) = chunk_entities.remove(world_pos) {
+            commands.entity(entity).despawn_recursive();
         }
 
-        // spawn chunk entity
-        let chunk_entity = commands
-            .spawn((
-                Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
-                Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
-                Mesh3d(mesh_handle),
-                MeshMaterial3d(global_chunk_material.0.clone()),
-                Name::new(format!("Chunk: {:?}", world_pos)),
-            ))
-            .id();
-        chunk_entities.insert(*world_pos, chunk_entity);
+        let mut total_vertex_count = 0;
+        if chunk_mesh_task.opaque.is_some() || chunk_mesh_task.transparent.is_some() {
+            // spawn chunk entity
+            let mut chunk_entity = commands
+                .spawn((
+                    Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
+                    Name::new(format!("Chunk: {:?}", world_pos)),
+                ));
+            chunk_entities.insert(*world_pos, chunk_entity.id());
+
+            if let Some(mesh) = chunk_mesh_task.opaque.take() {
+                let mut bevy_mesh = Mesh::new(
+                    PrimitiveTopology::TriangleList,
+                    RenderAssetUsages::RENDER_WORLD,
+                );
+
+                total_vertex_count += mesh.vertices.len();
+                bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices.clone());
+                bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone()));
+                let mesh_handle = meshes.add(bevy_mesh);
+                
+                chunk_entity.with_child((
+                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(global_chunk_material.opaque.clone()),
+                    ChunkEntityType::Opaque,
+                    Name::new("Opaque")
+                ));
+            }
+
+            if let Some(mesh) = chunk_mesh_task.transparent.take() {
+                let mut bevy_mesh = Mesh::new(
+                    PrimitiveTopology::TriangleList,
+                    RenderAssetUsages::RENDER_WORLD,
+                );
+
+                total_vertex_count += mesh.vertices.len();
+                bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices);
+                bevy_mesh.insert_indices(Indices::U32(mesh.indices));
+                let mesh_handle = meshes.add(bevy_mesh);
+                
+                chunk_entity.with_child((
+                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(global_chunk_material.transparent.clone()),
+                    ChunkEntityType::Transparent,
+                    Name::new("Transparent")
+                ));
+            }
+        }
+        vertex_diagnostic.insert(*world_pos, total_vertex_count as i32);
+        
     }
     mesh_tasks.retain(|(_p, op)| op.is_some());
 }

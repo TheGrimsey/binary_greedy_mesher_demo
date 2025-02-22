@@ -43,17 +43,27 @@ fn initialize_global_chunk_materials(
 
     // TODO: Add transparent material.
     
-    commands.insert_resource(GlobalChunkMaterial(chunk_materials.add(ChunkMaterial {
-        reflectance: 0.5,
-        perceptual_roughness: 1.0,
-        metallic: 0.01,
-        block_colors: colors.clone(),
-    })));
+    commands.insert_resource(GlobalChunkMaterial {
+        opaque: chunk_materials.add(ChunkMaterial {
+            reflectance: 0.5,
+            perceptual_roughness: 1.0,
+            metallic: 0.01,
+            block_colors: colors.clone(),
+            alpha_mode: AlphaMode::Opaque
+        }), 
+        transparent: chunk_materials.add(ChunkMaterial {
+            reflectance: 0.5,
+            perceptual_roughness: 1.0,
+            metallic: 0.01,
+            block_colors: colors.clone(),
+            alpha_mode: AlphaMode::Blend
+        }),   
+    });
 }
 
 fn apply_chunk_material(
     no_wireframe: Query<Entity, With<MeshMaterial3d<ChunkMaterial>>>,
-    wireframe: Query<Entity, With<MeshMaterial3d<ChunkMaterialWireframe>>>,
+    wireframe: Query<(Entity, &ChunkEntityType), With<MeshMaterial3d<ChunkMaterialWireframe>>>,
     input: Res<ButtonInput<KeyCode>>,
     mut mode: ResMut<ChunkMaterialWireframeMode>,
     mut commands: Commands,
@@ -78,10 +88,13 @@ fn apply_chunk_material(
             }
         }
         F::Off => {
-            for entity in wireframe.iter() {
+            for (entity, chunk_type) in wireframe.iter() {
                 commands
                     .entity(entity)
-                    .insert(MeshMaterial3d(chunk_mat.0.clone()))
+                    .insert(MeshMaterial3d(match chunk_type {
+                        ChunkEntityType::Opaque => chunk_mat.opaque.clone(),
+                        ChunkEntityType::Transparent => chunk_mat.transparent.clone(),
+                    }))
                     .remove::<MeshMaterial3d<ChunkMaterialWireframe>>();
             }
         }
@@ -89,7 +102,10 @@ fn apply_chunk_material(
 }
 
 #[derive(Resource, Reflect)]
-pub struct GlobalChunkMaterial(pub Handle<ChunkMaterial>);
+pub struct GlobalChunkMaterial {
+    pub opaque: Handle<ChunkMaterial>,
+    pub transparent: Handle<ChunkMaterial>,
+}
 #[derive(Resource, Reflect)]
 pub struct GlobalChunkWireframeMaterial(pub Handle<ChunkMaterialWireframe>);
 
@@ -97,6 +113,12 @@ pub struct GlobalChunkWireframeMaterial(pub Handle<ChunkMaterialWireframe>);
 // See the MeshVertexAttribute docs for more info.
 pub const ATTRIBUTE_VOXEL: MeshVertexAttribute =
     MeshVertexAttribute::new("Voxel", 988540919, VertexFormat::Uint32);
+
+#[derive(Component)]
+pub enum ChunkEntityType {
+    Opaque,
+    Transparent,
+}
 
 // This is the struct that will be passed to your shader
 #[derive(Asset, Reflect, AsBindGroup, Debug, Clone)]
@@ -110,6 +132,8 @@ pub struct ChunkMaterial {
 
     #[storage(1,read_only)]
     pub block_colors: Handle<ShaderStorageBuffer>,
+
+    pub alpha_mode: AlphaMode,
 }
 
 impl Material for ChunkMaterial {
@@ -121,7 +145,7 @@ impl Material for ChunkMaterial {
     }
 
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Opaque
+        self.alpha_mode
     }
 
     fn specialize(

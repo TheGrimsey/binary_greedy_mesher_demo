@@ -16,7 +16,7 @@ fn binary_mesh_optimized(chunks_refs: ChunksRefs) {
         ..default()
     });
 
-    let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32, block_registry);
+    let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32, block_registry, BlockFlags::SOLID);
 }
 
 // helper for incrementing and constructing chunksrefs

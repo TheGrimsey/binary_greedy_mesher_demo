@@ -10,10 +10,10 @@ use crate::{
     constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE_P},
     face_direction::FaceDir,
     lod::Lod,
-    utils::{generate_indices, make_vertex_u32, vec3_to_index}, voxel::BlockRegistry,
+    utils::{generate_indices, make_vertex_u32, vec3_to_index}, voxel::{BlockFlags, BlockRegistry},
 };
 
-pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>) -> Option<ChunkMesh> {
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>, flag_to_build: BlockFlags) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
@@ -33,9 +33,10 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
         y: usize,
         z: usize,
         axis_cols: &mut [[[u64; 34]; 34]; 3],
-        block_registry: &Arc<BlockRegistry>
+        block_registry: &Arc<BlockRegistry>,
+        flag: BlockFlags
     ) {
-        if block_registry.is_solid(b.block_type) {
+        if block_registry.has_flag(b.block_type, flag) {
             // x,z - y axis
             axis_cols[0][z][x] |= 1u64 << y as u64;
             // z,y - x axis
@@ -55,7 +56,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
                     1 => 0,
                     _ => (z * CHUNK_SIZE + y) * CHUNK_SIZE + x,
                 };
-                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols, &block_registry);
+                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols, &block_registry, flag_to_build);
             }
         }
     }
@@ -68,7 +69,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
         for y in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry, flag_to_build);
             }
         }
     }
@@ -76,7 +77,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
         for y in [0, CHUNK_SIZE_P - 1] {
             for x in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry, flag_to_build);
             }
         }
     }
@@ -84,7 +85,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
         for x in [0, CHUNK_SIZE_P - 1] {
             for y in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry, flag_to_build);
             }
         }
     }
@@ -171,7 +172,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
                         .or_default()
                         .entry(y)
                         .or_default();
-                    data[x as usize] |= 1u32 << z as u32;
+                    data[x] |= 1u32 << z as u32;
                 }
             }
         }
@@ -219,7 +220,7 @@ pub struct GreedyQuad {
 }
 
 impl GreedyQuad {
-    ///! compress this quad data into the input vertices vec
+    /// compress this quad data into the input vertices vec
     pub fn append_vertices(
         &self,
         vertices: &mut Vec<u32>,
@@ -241,17 +242,17 @@ impl GreedyQuad {
         let v4ao = ((ao >> 1) & 1) + ((ao >> 2) & 1) + ((ao >> 5) & 1);
 
         let v1 = make_vertex_u32(
-            face_dir.world_to_sample(axis as i32, self.x as i32, self.y as i32, &lod) * jump,
+            face_dir.world_to_sample(axis, self.x as i32, self.y as i32, lod) * jump,
             v1ao,
             face_dir.normal_index(),
             block_type,
         );
         let v2 = make_vertex_u32(
             face_dir.world_to_sample(
-                axis as i32,
+                axis,
                 self.x as i32 + self.w as i32,
                 self.y as i32,
-                &lod,
+                lod,
             ) * jump,
             v2ao,
             face_dir.normal_index(),
@@ -259,10 +260,10 @@ impl GreedyQuad {
         );
         let v3 = make_vertex_u32(
             face_dir.world_to_sample(
-                axis as i32,
+                axis,
                 self.x as i32 + self.w as i32,
                 self.y as i32 + self.h as i32,
-                &lod,
+                lod,
             ) * jump,
             v3ao,
             face_dir.normal_index(),
@@ -270,10 +271,10 @@ impl GreedyQuad {
         );
         let v4 = make_vertex_u32(
             face_dir.world_to_sample(
-                axis as i32,
+                axis,
                 self.x as i32,
                 self.y as i32 + self.h as i32,
-                &lod,
+                lod,
             ) * jump,
             v4ao,
             face_dir.normal_index(),
@@ -330,7 +331,7 @@ pub fn greedy_mesh_binary_plane(mut data: [u32; 32], lod_size: u32) -> Vec<Greed
                 }
 
                 // nuke the bits we expanded into
-                data[row + w] = data[row + w] & !mask;
+                data[row + w] &= !mask;
 
                 w += 1;
             }

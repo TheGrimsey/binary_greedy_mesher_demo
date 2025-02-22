@@ -14,7 +14,7 @@ use bevy_screen_diagnostics::{
 
 use new_voxel_testing::{
     rendering::{
-        ChunkMaterial, ChunkMaterialWireframe, GlobalChunkMaterial, GlobalChunkWireframeMaterial,
+        ChunkMaterial, ChunkMaterialWireframe, GlobalChunkWireframeMaterial,
         RenderingPlugin,
     },
     scanner::{Scanner, ScannerPlugin},
