@@ -7,13 +7,13 @@ use bevy::{math::ivec3, prelude::*, utils::HashMap};
 use crate::{
     chunk_mesh::ChunkMesh,
     chunks_refs::ChunksRefs,
-    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE_P},
+    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE3, CHUNK_SIZE_P},
     face_direction::FaceDir,
     lod::Lod,
     utils::{generate_indices, make_vertex_u32, vec3_to_index}, voxel::{BlockFlags, BlockRegistry},
 };
 
-pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>, flag_to_build: BlockFlags) -> Option<ChunkMesh> {
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
@@ -48,7 +48,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
 
     // inner chunk voxels.
     let chunk = &*chunks_refs.chunks[vec3_to_index(IVec3::new(1, 1, 1), 3)];
-    assert!(chunk.voxels.len() == CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE || chunk.voxels.len() == 1);
+    assert!(chunk.voxels.len() == CHUNK_SIZE3 || chunk.voxels.len() == 1);
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
@@ -146,20 +146,22 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
 
                     // calculate ambient occlusion
                     let mut ao_index = 0;
-                    for (ao_i, ao_offset) in ADJACENT_AO_DIRS.iter().enumerate() {
-                        // ambient occlusion is sampled based on axis(ascent or descent)
-                        let ao_sample_offset = match axis {
-                            0 => ivec3(ao_offset.x, -1, ao_offset.y), // down
-                            1 => ivec3(ao_offset.x, 1, ao_offset.y),  // up
-                            2 => ivec3(-1, ao_offset.y, ao_offset.x), // left
-                            3 => ivec3(1, ao_offset.y, ao_offset.x),  // right
-                            4 => ivec3(ao_offset.x, ao_offset.y, -1), // forward
-                            _ => ivec3(ao_offset.x, ao_offset.y, 1),  // back
-                        };
-                        let ao_voxel_pos = voxel_pos + ao_sample_offset;
-                        let ao_block = chunks_refs.get_block(ao_voxel_pos);
-                        if block_registry.is_solid(ao_block.block_type) {
-                            ao_index |= 1u32 << ao_i;
+                    if calculate_ao {
+                        for (ao_i, ao_offset) in ADJACENT_AO_DIRS.iter().enumerate() {
+                            // ambient occlusion is sampled based on axis(ascent or descent)
+                            let ao_sample_offset = match axis {
+                                0 => ivec3(ao_offset.x, -1, ao_offset.y), // down
+                                1 => ivec3(ao_offset.x, 1, ao_offset.y),  // up
+                                2 => ivec3(-1, ao_offset.y, ao_offset.x), // left
+                                3 => ivec3(1, ao_offset.y, ao_offset.x),  // right
+                                4 => ivec3(ao_offset.x, ao_offset.y, -1), // forward
+                                _ => ivec3(ao_offset.x, ao_offset.y, 1),  // back
+                            };
+                            let ao_voxel_pos = voxel_pos + ao_sample_offset;
+                            let ao_block = chunks_refs.get_block(ao_voxel_pos);
+                            if block_registry.is_solid(ao_block.block_type) {
+                                ao_index |= 1u32 << ao_i;
+                            }
                         }
                     }
 

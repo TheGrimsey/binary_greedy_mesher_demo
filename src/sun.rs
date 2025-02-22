@@ -7,7 +7,7 @@ pub const DAY_TIME_SEC: f32 = 60.0;
 pub const NIGHT_TIME_SEC: f32 = 1.0;
 pub const CYCLE_TIME: f32 = DAY_TIME_SEC + NIGHT_TIME_SEC;
 
-///! current time of day
+/// current time of day
 #[derive(Resource)]
 struct SkyTime(pub f32);
 

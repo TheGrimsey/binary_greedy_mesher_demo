@@ -66,7 +66,6 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
     let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
 
     let normal = normals[normal_index];
-    // out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
 
     let local_position = vec4<f32>(x,y,z, 1.0);
@@ -77,8 +76,6 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
 
     let world_position = model* local_position;
     out.position = mesh_functions::mesh_position_local_to_clip(model, local_position);
-
-    // out.world_position = mesh_functions::mesh_position_local_to_world(model, local_position);
 
     return out;
 }

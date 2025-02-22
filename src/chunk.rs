@@ -2,8 +2,7 @@ use bevy::prelude::*;
 use bracket_noise::prelude::*;
 
 use crate::{
-    utils::index_to_ivec3,
-    voxel::{BlockData, BlockId},
+    constants::CHUNK_SIZE3, utils::index_to_ivec3, voxel::{BlockData, BlockId}
 };
 
 #[derive(Clone)]
@@ -49,7 +48,7 @@ impl ChunkData {
                 }],
             };
         }
-        let mut voxels = vec![];
+        let mut voxels = Vec::with_capacity(CHUNK_SIZE3);
         let mut fast_noise = FastNoise::new();
         fast_noise.set_frequency(0.0254);
         for i in 0..32 * 32 * 32 {
@@ -72,7 +71,15 @@ impl ChunkData {
                     true => BlockId(1),
                     false => BlockId(2),
                 },
-                false =>  if voxel_pos.x == 20 { BlockId(3) } else { BlockId(0) },
+                false => {
+                    let on_x = voxel_pos.x % 16 == 0;
+                    let on_z = voxel_pos.z % 16 == 0;
+
+                    let on_x_chunk = chunk_pos.x % 4 == 0;
+                    let on_z_chunk = chunk_pos.z % 4 == 0;
+
+                    if on_x ^ on_z && on_x_chunk ^ on_z_chunk { BlockId(3) } else { BlockId(0) }
+                },
             };
             voxels.push(BlockData { block_type });
         }

@@ -12,7 +12,7 @@ pub enum Direction {
 }
 
 impl Direction {
-    ///! normal data is packed in the shader
+    /// normal data is packed in the shader
     pub fn get_normal(&self) -> i32 {
         match self {
             Direction::Left => 0i32,
@@ -36,7 +36,7 @@ impl Direction {
     }
 }
 
-///! plane data with 4 vertices
+/// plane data with 4 vertices
 pub struct Quad {
     pub color: Color,
     pub direction: Direction,

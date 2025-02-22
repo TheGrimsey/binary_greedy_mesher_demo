@@ -104,26 +104,22 @@ pub fn setup(
     commands.spawn((
         Name::new("directional light light"),
         Sun,
-        DirectionalLightBundle {
-            directional_light: DirectionalLight {
-                illuminance: 10000.0,
-                shadows_enabled: true,
-                ..default()
-            },
-            transform: Transform::from_rotation(Quat::from_euler(
-                EulerRot::ZYX,
-                0.0,
-                PI / 2.,
-                -PI / 4.,
-            )),
-            cascade_shadow_config: CascadeShadowConfigBuilder {
-                num_cascades: 1,
-                maximum_distance: 32.0 * 20.0,
-                ..default()
-            }
-            .into(),
+        DirectionalLight {
+            illuminance: 10000.0,
+            shadows_enabled: true,
             ..default()
         },
+        Transform::from_rotation(Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            PI / 2.,
+            -PI / 4.,
+        )),
+        CascadeShadowConfigBuilder {
+            num_cascades: 3,
+            maximum_distance: 32.0 * 20.0,
+            ..default()
+        }.build()
     ));
     // uncomment for scanner at origin position
     // commands.spawn((
@@ -137,7 +133,7 @@ pub fn setup(
             Camera3d::default(),
             Transform::from_xyz(0.0, 2.0, 0.5),
             Msaa::Off,
-            //OrderIndependentTransparencySettings::default()
+            OrderIndependentTransparencySettings::default()
         ))
         .insert(FlyCam);
 

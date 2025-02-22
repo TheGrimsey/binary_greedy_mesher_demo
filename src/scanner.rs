@@ -272,12 +272,7 @@ pub fn scan_mesh(mut scanners: Query<&mut Scanner>, mut voxel_engine: ResMut<Vox
                 voxel_engine.load_mesh_queue.push(chunk_pos);
                 // abort unload
                 let index_of_unloading =
-                    voxel_engine.unload_mesh_queue.iter().enumerate().find_map(
-                        |(i, pos)| match pos == &chunk_pos {
-                            true => Some(i),
-                            false => None,
-                        },
-                    );
+                    voxel_engine.unload_mesh_queue.iter().position(|pos| pos == &chunk_pos);
                 if let Some(i) = index_of_unloading {
                     voxel_engine.unload_mesh_queue.remove(i);
                 }

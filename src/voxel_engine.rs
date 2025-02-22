@@ -3,10 +3,6 @@ use std::sync::Arc;
 use bevy::{
     diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, RegisterDiagnostic},
     prelude::*,
-    render::{
-        mesh::Indices, primitives::Aabb, render_asset::RenderAssetUsages,
-        render_resource::PrimitiveTopology,
-    },
     tasks::{block_on, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
@@ -18,7 +14,7 @@ use crate::{
     chunks_refs::ChunksRefs,
     constants::CHUNK_SIZE_I32,
     lod::Lod,
-    rendering::{ChunkEntityType, GlobalChunkMaterial, ATTRIBUTE_VOXEL},
+    rendering::{ChunkEntityType, GlobalChunkMaterial},
     scanner::Scanner,
     utils::{get_edging_chunk, vec3_to_index},
     voxel::{load_block_registry, BlockData, BlockFlags, BlockId, BlockRegistryResource},
@@ -280,8 +276,8 @@ pub fn start_mesh_tasks(
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
-                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID),
-                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT)
+                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID, true),
+                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT, true)
                 }
             }),
         };
@@ -393,18 +389,14 @@ pub fn join_mesh(
             chunk_entities.insert(*world_pos, chunk_entity.id());
 
             if let Some(mesh) = chunk_mesh_task.opaque.take() {
-                let mut bevy_mesh = Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-
                 total_vertex_count += mesh.vertices.len();
-                bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices.clone());
-                bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone()));
+
+                let aabb = mesh.calculate_aabb();
+                let bevy_mesh = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
                 
                 chunk_entity.with_child((
-                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
+                    aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(global_chunk_material.opaque.clone()),
                     ChunkEntityType::Opaque,
@@ -413,18 +405,14 @@ pub fn join_mesh(
             }
 
             if let Some(mesh) = chunk_mesh_task.transparent.take() {
-                let mut bevy_mesh = Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-
                 total_vertex_count += mesh.vertices.len();
-                bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices);
-                bevy_mesh.insert_indices(Indices::U32(mesh.indices));
+
+                let aabb = mesh.calculate_aabb();
+                let bevy_mesh = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
                 
                 chunk_entity.with_child((
-                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
+                    aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(global_chunk_material.transparent.clone()),
                     ChunkEntityType::Transparent,
@@ -433,7 +421,6 @@ pub fn join_mesh(
             }
         }
         vertex_diagnostic.insert(*world_pos, total_vertex_count as i32);
-        
     }
     mesh_tasks.retain(|(_p, op)| op.is_some());
 }

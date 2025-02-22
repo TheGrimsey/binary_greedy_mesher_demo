@@ -38,7 +38,7 @@ pub fn is_on_edge(pos: IVec3) -> bool {
     false
 }
 
-///! if lying on the edge of our chunk, return the edging chunk
+/// if lying on the edge of our chunk, return the edging chunk
 #[inline]
 pub fn get_edging_chunk(pos: IVec3) -> Option<IVec3> {
     let mut chunk_dir = IVec3::ZERO;
@@ -89,12 +89,26 @@ pub fn make_vertex_u32(
 }
 
 #[inline]
+fn x_positive_bits(bits: u32) -> u32{
+    (1 << bits) - 1
+}
+
+#[inline]
+pub fn get_pos_from_vertex_u32(vertex: u32) -> IVec3 {
+    IVec3::new(
+        (vertex & x_positive_bits(6)) as i32,
+        ((vertex >> 6) & x_positive_bits(6)) as i32,
+        ((vertex >> 12) & x_positive_bits(6)) as i32,
+    )
+}
+
+#[inline]
 pub fn world_to_chunk(pos: Vec3) -> IVec3 {
     ((pos - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3()
 }
 
-///! generate a vec of indices
-///! assumes vertices are made of quads, and counter clockwise ordered
+/// generate a vec of indices
+/// assumes vertices are made of quads, and counter clockwise ordered
 #[inline]
 pub fn generate_indices(vertex_count: usize) -> Vec<u32> {
     let indices_count = vertex_count / 4;
