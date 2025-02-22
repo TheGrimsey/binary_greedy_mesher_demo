@@ -3,7 +3,7 @@ use bracket_noise::prelude::*;
 
 use crate::{
     utils::index_to_ivec3,
-    voxel::{BlockData, BlockType},
+    voxel::{BlockData, BlockId},
 };
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ impl ChunkData {
         if chunk_pos.y * 32 + 32 > 21 + 32 {
             return Self {
                 voxels: vec![BlockData {
-                    block_type: BlockType::Air,
+                    block_type: BlockId(0),
                 }],
             };
         }
@@ -45,7 +45,7 @@ impl ChunkData {
         if chunk_pos.y * 32 < -21 - 32 {
             return Self {
                 voxels: vec![BlockData {
-                    block_type: BlockType::Grass,
+                    block_type: BlockId(2),
                 }],
             };
         }
@@ -69,10 +69,10 @@ impl ChunkData {
 
             let block_type = match solid {
                 true => match (h - voxel_pos.y as f32) > 1.0 {
-                    true => BlockType::Dirt,
-                    false => BlockType::Grass,
+                    true => BlockId(1),
+                    false => BlockId(2),
                 },
-                false => BlockType::Air,
+                false => BlockId(0),
             };
             voxels.push(BlockData { block_type });
         }

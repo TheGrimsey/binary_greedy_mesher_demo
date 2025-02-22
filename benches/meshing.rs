@@ -1,32 +1,22 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
-use bevy::{math::IVec3, utils::HashMap};
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use bevy::utils::default;
+use criterion::{criterion_group, criterion_main, Criterion};
 use new_voxel_testing::{
     chunk::ChunkData,
     chunks_refs::ChunksRefs,
-    culled_mesher, culled_mesher_optimized, greedy_mesher, greedy_mesher_optimized,
+    greedy_mesher_optimized,
     lod::Lod,
-    utils::{index_to_ivec3, index_to_ivec3_bounds},
-    voxel::{BlockData, BlockType},
+    voxel::{BlockData, BlockFlags, BlockId, BlockRegistry},
 };
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-
-fn bench_mesh(chunks_refs: ChunksRefs) {
-    greedy_mesher::build_chunk_mesh(chunks_refs, Lod::L32);
-}
-
-fn bench_mesh_no_ao(chunks_refs: ChunksRefs) {
-    greedy_mesher::build_chunk_mesh_no_ao(chunks_refs, Lod::L32);
-}
 
 fn binary_mesh_optimized(chunks_refs: ChunksRefs) {
-    let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32);
-}
+    let block_registry = Arc::new(BlockRegistry {
+        block_flags: vec![BlockFlags::empty(), BlockFlags::SOLID, BlockFlags::SOLID],
+        ..default()
+    });
 
-fn culled_mesh_ao(chunks_refs: ChunksRefs) {
-    culled_mesher::build_chunk_mesh_ao(&chunks_refs, Lod::L32);
+    let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32, block_registry);
 }
 
 // helper for incrementing and constructing chunksrefs
@@ -40,7 +30,7 @@ fn make_empty() -> ChunksRefs {
     for _i in 0..3 * 3 * 3 {
         chunks.push(Arc::new(ChunkData {
             voxels: vec![BlockData {
-                block_type: BlockType::Air,
+                block_type: BlockId(0),
             }],
         }));
     }
@@ -52,7 +42,7 @@ fn make_filled() -> ChunksRefs {
     for _i in 0..3 * 3 * 3 {
         chunks.push(Arc::new(ChunkData {
             voxels: vec![BlockData {
-                block_type: BlockType::Grass,
+                block_type: BlockId(2),
             }],
         }));
     }
@@ -87,14 +77,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     // c.bench_function("greedy slicer, filled 1", |b| {
     //     b.iter_with_setup(|| [1u32; 32], |i| slicer(i))
     // });
-    c.bench_function("CULLED meshing: 1 chunk [ao]", |b| {
-        let mut s = 0;
-        b.iter_with_setup(|| make_chunks_refs(&mut s), |i| culled_mesh_ao(i))
-    });
 
     c.bench_function("GREEDY meshing OPTIMIZED: 1 chunk [ao]", |b| {
         let mut s = 0;
-        b.iter_with_setup(|| make_chunks_refs(&mut s), |i| binary_mesh_optimized(i))
+        b.iter_with_setup(|| make_chunks_refs(&mut s), binary_mesh_optimized)
     });
     // c.bench_function("GREEDY meshing OPTIMIZED: 1 chunk [ao] FILLED", |b| {
     //     b.iter_with_setup(|| make_filled(), |i| binary_mesh_optimized(i))

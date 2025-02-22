@@ -94,7 +94,7 @@ pub fn modify_current_terrain(
             rng.gen_range(0..32),
             rng.gen_range(0..32),
         );
-        mods.push(ChunkModification(pos, BlockType::Air));
+        mods.push(ChunkModification(pos, BlockId(0)));
     }
     voxel_engine.chunk_modifications.insert(cam_chunk, mods);
 }

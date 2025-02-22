@@ -4,7 +4,7 @@ use new_voxel_testing::{
     chunks_refs::ChunksRefs,
     constants::{CHUNK_SIZE, CHUNK_SIZE_I32, CHUNK_SIZE_P},
     utils::vec3_to_index,
-    voxel::{BlockData, BlockType},
+    voxel::{BlockData, BlockId},
 };
 
 fn iter_chunkrefs_padding(chunks_refs: ChunksRefs) {
@@ -45,13 +45,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("iter chunk_refs ", |b| {
         b.iter_with_setup(
             || ChunksRefs::make_dummy_chunk_refs(0),
-            |i| iter_chunkrefs(i),
+            iter_chunkrefs,
         )
     });
     c.bench_function("iter chunk_refs padding ", |b| {
         b.iter_with_setup(
             || ChunksRefs::make_dummy_chunk_refs(0),
-            |i| iter_chunkrefs_padding(i),
+            iter_chunkrefs_padding,
         )
     });
     c.bench_function("iter vec", |b| {
@@ -60,12 +60,12 @@ fn criterion_benchmark(c: &mut Criterion) {
                 let mut d = vec![];
                 for _ in 0..CHUNK_SIZE_I32 * CHUNK_SIZE_I32 * CHUNK_SIZE_I32 {
                     d.push(BlockData {
-                        block_type: BlockType::Air,
+                        block_type: BlockId(0),
                     });
                 }
                 d
             },
-            |i| iter_vec(i),
+            iter_vec,
         )
     });
 }

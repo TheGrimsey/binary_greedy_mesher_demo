@@ -22,7 +22,7 @@ use crate::{
     rendering::{GlobalChunkMaterial, ATTRIBUTE_VOXEL},
     scanner::Scanner,
     utils::{get_edging_chunk, vec3_to_index},
-    voxel::{BlockData, BlockType},
+    voxel::{load_block_registry, BlockData, BlockId, BlockRegistry, BlockRegistryResource},
 };
 use futures_lite::future;
 
@@ -43,8 +43,6 @@ impl Plugin for VoxelEnginePlugin {
             Update,
             ((join_data, join_mesh), (unload_data, unload_mesh)).chain(),
         );
-        app.add_systems(Update, debug_inputs);
-
         app.add_systems(Startup, setup_diagnostics);
         app.register_diagnostic(Diagnostic::new(DIAG_LOAD_MESH_QUEUE));
         app.register_diagnostic(Diagnostic::new(DIAG_UNLOAD_MESH_QUEUE));
@@ -54,33 +52,13 @@ impl Plugin for VoxelEnginePlugin {
         app.register_diagnostic(Diagnostic::new(DIAG_MESH_TASKS));
         app.register_diagnostic(Diagnostic::new(DIAG_DATA_TASKS));
         app.add_systems(Update, diagnostics_count);
-    }
-}
 
-pub fn debug_inputs(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut voxel_engine: ResMut<VoxelEngine>,
-    scanners: Query<(&GlobalTransform, &Scanner)>,
-) {
-    if keyboard_input.just_pressed(KeyCode::KeyR) {
-        // swap meshing algorithm
-        use MeshingMethod as MM;
-        voxel_engine.meshing_method = match voxel_engine.meshing_method {
-            MM::VertexCulled => MM::BinaryGreedyMeshing,
-            MM::BinaryGreedyMeshing => MM::VertexCulled,
-        };
-        let (scanner_transform, scanner) = scanners.single();
-        // unload all meshes
-        voxel_engine.unload_all_meshes(scanner, scanner_transform);
-    }
-    if keyboard_input.just_pressed(KeyCode::KeyT) {
-        // toggle rendering method
+        app.add_systems(PreStartup, load_block_registry);
     }
 }
 
 #[derive(Debug, Reflect, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum MeshingMethod {
-    VertexCulled,
     BinaryGreedyMeshing,
 }
 
@@ -102,7 +80,7 @@ pub struct VoxelEngine {
     pub chunk_modifications: HashMap<IVec3, Vec<ChunkModification>>,
 }
 
-pub struct ChunkModification(pub IVec3, pub BlockType);
+pub struct ChunkModification(pub IVec3, pub BlockId);
 
 const DIAG_LOAD_DATA_QUEUE: DiagnosticPath = DiagnosticPath::const_new("load_data_queue");
 const DIAG_UNLOAD_DATA_QUEUE: DiagnosticPath = DiagnosticPath::const_new("unload_data_queue");
@@ -277,6 +255,7 @@ pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>
 pub fn start_mesh_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
     scanners: Query<&GlobalTransform, With<Scanner>>,
+    block_registry: Res<BlockRegistryResource>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -304,12 +283,11 @@ pub fn start_mesh_tasks(
             continue;
         };
         let llod = *lod;
+
+        let block_registry = block_registry.0.clone();
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
-                crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod)
-            }),
-            MeshingMethod::VertexCulled => task_pool.spawn(async move {
-                crate::culled_mesher::build_chunk_mesh_ao(&chunks_refs, llod)
+                crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry)
             }),
         };
 
@@ -441,8 +419,7 @@ pub fn join_mesh(
         );
         vertex_diagnostic.insert(*world_pos, mesh.vertices.len() as i32);
         bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, mesh.vertices.clone());
-        // bevy_mesh.set_indices(Some(Indices::U32(mesh.indices.clone().into())));
-        bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone().into()));
+        bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone()));
         let mesh_handle = meshes.add(bevy_mesh);
 
         if let Some(entity) = chunk_entities.get(world_pos) {
@@ -459,6 +436,7 @@ pub fn join_mesh(
                     material: global_chunk_material.0.clone(),
                     ..default()
                 },
+                Name::new(format!("Chunk: {:?}", world_pos)),
             ))
             .id();
         chunk_entities.insert(*world_pos, chunk_entity);

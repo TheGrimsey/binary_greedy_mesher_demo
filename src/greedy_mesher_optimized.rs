@@ -1,6 +1,5 @@
 use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
+    collections::VecDeque, sync::Arc
 };
 
 use bevy::{math::ivec3, prelude::*, utils::HashMap};
@@ -8,13 +7,13 @@ use bevy::{math::ivec3, prelude::*, utils::HashMap};
 use crate::{
     chunk_mesh::ChunkMesh,
     chunks_refs::ChunksRefs,
-    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE_P, CHUNK_SIZE_P2, CHUNK_SIZE_P3},
+    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE_P},
     face_direction::FaceDir,
     lod::Lod,
-    utils::{generate_indices, make_vertex_u32, vec3_to_index},
+    utils::{generate_indices, make_vertex_u32, vec3_to_index}, voxel::BlockRegistry,
 };
 
-pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh> {
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
@@ -34,8 +33,9 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         y: usize,
         z: usize,
         axis_cols: &mut [[[u64; 34]; 34]; 3],
+        block_registry: &Arc<BlockRegistry>
     ) {
-        if b.block_type.is_solid() {
+        if block_registry.is_solid(b.block_type) {
             // x,z - y axis
             axis_cols[0][z][x] |= 1u64 << y as u64;
             // z,y - x axis
@@ -55,7 +55,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
                     1 => 0,
                     _ => (z * CHUNK_SIZE + y) * CHUNK_SIZE + x,
                 };
-                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols)
+                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols, &block_registry);
             }
         }
     }
@@ -68,7 +68,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         for y in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
             }
         }
     }
@@ -76,7 +76,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         for y in [0, CHUNK_SIZE_P - 1] {
             for x in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
             }
         }
     }
@@ -84,7 +84,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         for x in [0, CHUNK_SIZE_P - 1] {
             for y in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols, &block_registry);
             }
         }
     }
@@ -157,7 +157,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
                         };
                         let ao_voxel_pos = voxel_pos + ao_sample_offset;
                         let ao_block = chunks_refs.get_block(ao_voxel_pos);
-                        if ao_block.block_type.is_solid() {
+                        if block_registry.is_solid(ao_block.block_type) {
                             ao_index |= 1u32 << ao_i;
                         }
                     }
@@ -165,7 +165,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
                     let current_voxel = chunks_refs.get_block_no_neighbour(voxel_pos);
                     // let current_voxel = chunks_refs.get_block(voxel_pos);
                     // we can only greedy mesh same block types + same ambient occlusion
-                    let block_hash = ao_index | ((current_voxel.block_type as u32) << 9);
+                    let block_hash = ao_index | ((current_voxel.block_type.0) << 9);
                     let data = data[axis]
                         .entry(block_hash)
                         .or_default()

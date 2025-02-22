@@ -20,7 +20,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                     rng.gen_range(-b..b),
                 ))
             },
-            |i| bench_chunk(i),
+            bench_chunk,
         )
     });
 }
