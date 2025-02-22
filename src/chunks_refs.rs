@@ -62,9 +62,9 @@ impl ChunksRefs {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut chunks = vec![];
         let pos = IVec3::new(
-            rng.gen_range(-20..20),
-            rng.gen_range(-5..5),
-            rng.gen_range(-20..20),
+            rng.random_range(-20..20),
+            rng.random_range(-5..5),
+            rng.random_range(-20..20),
         );
         for i in 0..3 * 3 * 3 {
             let offset = index_to_ivec3_bounds(i, 3) + IVec3::NEG_ONE;

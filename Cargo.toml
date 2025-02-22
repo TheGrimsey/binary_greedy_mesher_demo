@@ -6,16 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.13.0"
-bevy-inspector-egui = "0.23"
-bevy_atmosphere = "0.9"
-bevy_flycam = "0.13.0"
-bevy_screen_diagnostics = "0.5.0"
+bevy = "0.15.0"
+bevy-inspector-egui = "0.29"
+bevy_atmosphere = "0.12"
+bevy_flycam = "0.15.0"
+bevy_screen_diagnostics = { git = "https://github.com/mlupo19/bevy_screen_diagnostics.git", branch = "personal/0.15" }
 bitflags = "2.8.0"
 bracket-noise = "0.8.7"
 futures-lite = "2.2.0"
-rand = "0.8.5"
-rand_chacha = "0.3.1"
+rand = "0.9"
+rand_chacha = "0.9"
 tinyvec = "1.6.0"
 
 [dev-dependencies]

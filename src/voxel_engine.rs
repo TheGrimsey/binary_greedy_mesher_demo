@@ -22,7 +22,7 @@ use crate::{
     rendering::{GlobalChunkMaterial, ATTRIBUTE_VOXEL},
     scanner::Scanner,
     utils::{get_edging_chunk, vec3_to_index},
-    voxel::{load_block_registry, BlockData, BlockId, BlockRegistry, BlockRegistryResource},
+    voxel::{load_block_registry, BlockData, BlockId, BlockRegistryResource},
 };
 use futures_lite::future;
 
@@ -361,19 +361,19 @@ pub struct WaitingToLoadMeshTag;
 
 pub fn promote_dirty_meshes(
     mut commands: Commands,
-    children: Query<(Entity, &Handle<Mesh>, &Parent), With<WaitingToLoadMeshTag>>,
-    mut parents: Query<&mut Handle<Mesh>, Without<WaitingToLoadMeshTag>>,
+    children: Query<(Entity, &Mesh3d, &Parent), With<WaitingToLoadMeshTag>>,
+    mut parents: Query<&mut Mesh3d, Without<WaitingToLoadMeshTag>>,
     asset_server: Res<AssetServer>,
 ) {
-    for (entity, handle, parent) in children.iter() {
-        if let Some(state) = asset_server.get_load_state(handle) {
+    for (entity, mesh, parent) in children.iter() {
+        if let Some(state) = asset_server.get_load_state(mesh.id()) {
             match state {
-                LoadState::Loaded | LoadState::Failed => {
+                LoadState::Loaded | LoadState::Failed(_) => {
                     let Ok(mut parent_handle) = parents.get_mut(parent.get()) else {
                         continue;
                     };
                     info!("updgraded!");
-                    *parent_handle = handle.clone();
+                    *parent_handle = mesh.clone();
                     commands.entity(entity).despawn();
                 }
                 LoadState::Loading => {
@@ -430,12 +430,9 @@ pub fn join_mesh(
         let chunk_entity = commands
             .spawn((
                 Aabb::from_min_max(Vec3::ZERO, Vec3::splat(32.0)),
-                MaterialMeshBundle {
-                    transform: Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
-                    mesh: mesh_handle,
-                    material: global_chunk_material.0.clone(),
-                    ..default()
-                },
+                Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(global_chunk_material.0.clone()),
                 Name::new(format!("Chunk: {:?}", world_pos)),
             ))
             .id();

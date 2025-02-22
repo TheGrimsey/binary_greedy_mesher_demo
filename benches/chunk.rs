@@ -11,13 +11,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter_with_setup(
             || {
                 use rand::Rng;
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 let b = 100;
                 let y = 20;
                 black_box(IVec3::new(
-                    rng.gen_range(-b..b),
-                    rng.gen_range(-y..y),
-                    rng.gen_range(-b..b),
+                    rng.random_range(-b..b),
+                    rng.random_range(-y..y),
+                    rng.random_range(-b..b),
                 ))
             },
             bench_chunk,

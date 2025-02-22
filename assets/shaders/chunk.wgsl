@@ -15,7 +15,7 @@
 }
 #endif
 
-#import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_clip, mesh_normal_local_to_world}
+#import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip, mesh_normal_local_to_world}
 #import bevy_pbr::pbr_functions::{calculate_view, prepare_world_normal}
 #import bevy_pbr::mesh_view_bindings
 #import bevy_pbr::mesh_bindings
@@ -89,9 +89,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // let normal_index: u32 = (vertex.v_pos_6b_normal_3b_texid_8b & 1835008u) >> 18u;
 
     let local_position = vec4<f32>(x,y,z, 1.0);
-    let world_position = get_model_matrix(vertex.instance_index) * local_position;
+    let world_position = get_world_from_local(vertex.instance_index) * local_position;
     out.clip_position = mesh_position_local_to_clip(
-        get_model_matrix(vertex.instance_index),
+        get_world_from_local(vertex.instance_index),
         local_position,
     );
 

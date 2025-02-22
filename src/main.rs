@@ -1,14 +1,10 @@
 use std::f32::consts::PI;
 
 use bevy::{
-    core::TaskPoolThreadAssignmentPolicy,
-    math::{ivec3, vec3},
-    pbr::{wireframe::WireframePlugin, CascadeShadowConfigBuilder, ShadowFilteringMethod},
-    prelude::*,
-    render::{
+    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
         settings::{RenderCreation, WgpuFeatures, WgpuSettings},
         RenderPlugin,
-    },
+    }
 };
 
 use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin};
@@ -86,13 +82,13 @@ pub fn modify_current_terrain(
     let cam_transform = query.single();
     let cam_chunk = world_to_chunk(cam_transform.translation + (cam_transform.forward() * 64.0));
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut mods = vec![];
     for _i in 0..32 * 32 {
         let pos = ivec3(
-            rng.gen_range(0..32),
-            rng.gen_range(0..32),
-            rng.gen_range(0..32),
+            rng.random_range(0..32),
+            rng.random_range(0..32),
+            rng.random_range(0..32),
         );
         mods.push(ChunkModification(pos, BlockId(0)));
     }
@@ -160,10 +156,9 @@ pub fn setup(
     )));
 
     // circular base in origin
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Circle::new(22.0)),
-        material: materials.add(Color::GREEN),
-        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Circle::new(22.0))),
+        MeshMaterial3d(materials.add(Color::from(css::GREEN))),
+        Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+    ));
 }

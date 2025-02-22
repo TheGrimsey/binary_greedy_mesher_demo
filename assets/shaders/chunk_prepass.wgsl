@@ -78,7 +78,7 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
 
     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
     // See https://github.com/gfx-rs/naga/issues/2416
-    var model = mesh_functions::get_model_matrix(vertex.instance_index);
+    var model = mesh_functions::get_world_from_local(vertex.instance_index);
 
     let world_position = model* local_position;
     out.position = mesh_functions::mesh_position_local_to_clip(model, local_position);

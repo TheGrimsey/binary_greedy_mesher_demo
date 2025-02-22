@@ -2,7 +2,7 @@ use bevy::{
     pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
     render::{
-        mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
+        mesh::{MeshVertexAttribute, MeshVertexBufferLayoutRef},
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
             SpecializedMeshPipelineError, VertexFormat,
@@ -28,8 +28,8 @@ impl Plugin for RenderingPlugin {
 }
 
 fn apply_chunk_material(
-    no_wireframe: Query<Entity, With<Handle<ChunkMaterial>>>,
-    wireframe: Query<Entity, With<Handle<ChunkMaterialWireframe>>>,
+    no_wireframe: Query<Entity, With<MeshMaterial3d<ChunkMaterial>>>,
+    wireframe: Query<Entity, With<MeshMaterial3d<ChunkMaterialWireframe>>>,
     input: Res<ButtonInput<KeyCode>>,
     mut mode: ResMut<ChunkMaterialWireframeMode>,
     mut commands: Commands,
@@ -49,16 +49,16 @@ fn apply_chunk_material(
             for entity in no_wireframe.iter() {
                 commands
                     .entity(entity)
-                    .insert(chunk_mat_wireframe.0.clone())
-                    .remove::<Handle<ChunkMaterial>>();
+                    .insert(MeshMaterial3d(chunk_mat_wireframe.0.clone()))
+                    .remove::<MeshMaterial3d<ChunkMaterial>>();
             }
         }
         F::Off => {
             for entity in wireframe.iter() {
                 commands
                     .entity(entity)
-                    .insert(chunk_mat.0.clone())
-                    .remove::<Handle<ChunkMaterialWireframe>>();
+                    .insert(MeshMaterial3d(chunk_mat.0.clone()))
+                    .remove::<MeshMaterial3d<ChunkMaterialWireframe>>();
             }
         }
     }
@@ -100,10 +100,10 @@ impl Material for ChunkMaterial {
     fn specialize(
         _pipeline: &MaterialPipeline<Self>,
         descriptor: &mut RenderPipelineDescriptor,
-        layout: &MeshVertexBufferLayout,
+        layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
+        let vertex_layout = layout.0.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())
     }
@@ -142,10 +142,10 @@ impl Material for ChunkMaterialWireframe {
     fn specialize(
         _pipeline: &MaterialPipeline<Self>,
         descriptor: &mut RenderPipelineDescriptor,
-        layout: &MeshVertexBufferLayout,
+        layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
+        let vertex_layout = layout.0.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
         descriptor.primitive.polygon_mode = PolygonMode::Line;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())

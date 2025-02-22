@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy::{ecs::system::{Commands, Resource}, render::color::Color, utils::{default, HashMap}};
+use bevy::{color::Color, ecs::system::{Commands, Resource}, utils::{default, HashMap}};
 
 /// The on disk identifier for a block.
 /// Consistent between adding & removing block types.
@@ -95,7 +95,7 @@ impl Default for Block {
         Self {
             visibility: BlockVisibilty::Solid,
             collision: true,
-            color: Color::RED,
+            color: Color::srgb(1.0, 0.0, 1.0),
         }
     }
 }
@@ -109,8 +109,8 @@ pub(super) fn load_block_registry(
         BlockStringIdentifier(Box::from("air")),
         &Block { visibility: BlockVisibilty::Invisible, collision: false, ..default() },
     );
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), &Block { visibility: BlockVisibilty::Solid, color: Color::rgb(0.0, 1.0, 0.0), ..default() });
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), &Block { visibility: BlockVisibilty::Solid, color: Color::rgb(0.3, 0.4, 0.0), ..default() });
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.0, 1.0, 0.0), ..default() });
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.3, 0.4, 0.0), ..default() });
 
     commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 }
