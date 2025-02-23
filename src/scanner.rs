@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, utils::HashSet};
 
 use crate::{
-    constants::ADJACENT_CHUNK_DIRECTIONS, utils::index_to_ivec3_bounds, voxel_engine::VoxelEngine,
+    constants::ADJACENT_CHUNK_DIRECTIONS, utils::{index_to_ivec3_bounds, world_to_chunk}, voxel_engine::VoxelEngine,
 };
 
 pub const MAX_DATA_TASKS: usize = 9;
@@ -85,12 +85,12 @@ fn detect_move(
     mut voxel_engine: ResMut<VoxelEngine>,
 ) {
     for (mut scanner, g_transform) in scanners.iter_mut() {
-        let chunk_pos = ((g_transform.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
+        let chunk_pos = world_to_chunk(g_transform.translation());
         let previous_chunk_pos = scanner.prev_chunk_pos;
         let chunk_pos_changed = chunk_pos != scanner.prev_chunk_pos;
         scanner.prev_chunk_pos = chunk_pos;
         if !chunk_pos_changed {
-            return;
+            continue;
         }
         let load_data_area = scanner
             .data_sampling_offsets
@@ -167,11 +167,11 @@ fn detect_move(
             !want_unload
         });
 
-        scanner.unresolved_mesh_load.sort_by(|a, b| {
+        unresolved_mesh_load.sort_by(|a, b| {
             a.distance_squared(chunk_pos)
                 .cmp(&b.distance_squared(chunk_pos))
         });
-        scanner.unresolved_data_load.sort_by(|a, b| {
+        unresolved_data_load.sort_by(|a, b| {
             a.distance_squared(chunk_pos)
                 .cmp(&b.distance_squared(chunk_pos))
         });
@@ -247,18 +247,15 @@ pub fn scan_data_unload(
 pub fn scan_mesh_unload(mut scanners: Query<&mut Scanner>, mut voxel_engine: ResMut<VoxelEngine>) {
     // find all loaded and check if in range
     for mut scanner in scanners.iter_mut() {
-        for chunk_pos in scanner.unresolved_mesh_unload.drain(..) {
-            voxel_engine.unload_mesh_queue.push(chunk_pos);
-        }
+        voxel_engine.unload_mesh_queue.extend(scanner.unresolved_mesh_unload.drain(..));
     }
 }
 
-pub fn scan_mesh(mut scanners: Query<&mut Scanner>, mut voxel_engine: ResMut<VoxelEngine>) {
+pub fn scan_mesh(mut scanners: Query<&mut Scanner>, mut voxel_engine: ResMut<VoxelEngine>, mut retries: Local<Vec<IVec3>>) {
     for mut scanner in scanners.iter_mut() {
         // if voxel_engine.data_tasks.len() >= MAX_MESH_TASKS {
         //     return;
         // }
-        let mut retries = Vec::new();
         let l = scanner.unresolved_mesh_load.len();
         for chunk_pos in scanner.unresolved_mesh_load.drain(0..MAX_SCANS.min(l)) {
             let mut busy = voxel_engine.load_mesh_queue.contains(&chunk_pos);

@@ -31,6 +31,7 @@ struct ChunkMaterial {
 
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
 @group(2) @binding(1) var<storage, read> block_color: array<vec4<f32>>;
+@group(2) @binding(2) var<storage, read> block_emissive: array<vec4<f32>>;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -42,15 +43,10 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
     @location(2) blend_color: vec4<f32>,
-    @location(3) ambient: f32,
-    @location(4) instance_index: u32,
+    @location(3) blend_emissive: vec4<f32>,
+    @location(4) ambient: f32,
+    @location(5) instance_index: u32,
 };
-
-// struct FragmentInput {
-//     // @builtin(position) clip_position: vec4<f32>,
-//     @location(0) blend_color: vec3<f32>,
-//     @location(1) ambient: f32,
-// };
 
 var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
 
@@ -64,13 +60,6 @@ var<private> normals: array<vec3<f32>,6> = array<vec3<f32>,6> (
 	vec3<f32>(0.0, 0.0, -1.0), // Forward
 	vec3<f32>(0.0, 0.0, 1.0) // Back
 );
-
-/*var<private> block_color: array<vec3<f32>,3> = array<vec3<f32>,3> (
-	vec3<f32>(0.0, 0.0, 0.0), // air
-	vec3<f32>(0.0, 1.0, 0.0), // grass
-	vec3<f32>(0.3, 0.4, 0.0), // dirt
-);*/
-
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -113,6 +102,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let fun = (low * noise) + (high * (1.0-noise));
     out.blend_color = block_color[block_index];
+    out.blend_emissive = block_emissive[block_index];
     out.instance_index = vertex.instance_index;
     return out;
 }
@@ -139,6 +129,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #endif
 
     pbr_input.material.base_color = vec4<f32>(input.blend_color.xyz * input.ambient, input.blend_color.w);
+    pbr_input.material.emissive = input.blend_emissive;
 
     pbr_input.material.reflectance = chunk_material.reflectance;
     pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;

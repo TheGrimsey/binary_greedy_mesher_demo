@@ -16,7 +16,7 @@ use crate::{
     lod::Lod,
     rendering::{ChunkEntityType, GlobalChunkMaterial},
     scanner::Scanner,
-    utils::{get_edging_chunk, vec3_to_index},
+    utils::{get_edging_chunk, vec3_to_index, world_to_chunk},
     voxel::{load_block_registry, BlockData, BlockFlags, BlockId, BlockRegistryResource},
 };
 use futures_lite::future;
@@ -183,11 +183,19 @@ pub fn start_data_tasks(
         ..
     } = voxel_engine.as_mut();
 
-    let scanner_g = scanners.single();
-    let scan_pos = ((scanner_g.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
-    load_data_queue.sort_by(|a, b| {
-        a.distance_squared(scan_pos)
-            .cmp(&b.distance_squared(scan_pos))
+    // Order by closest distance to any scanner.
+    // TODO: This could use bevy_spatial for better performance.
+    load_data_queue.sort_by_cached_key(|pos| {
+        let mut closest_distance = i32::MAX;
+        for scanner in scanners.iter() {
+            let scan_pos = world_to_chunk(scanner.translation());
+            let distance = pos.distance_squared(scan_pos);
+            if distance < closest_distance {
+                closest_distance = distance;
+            }
+        }
+
+        closest_distance
     });
 
     let tasks_left = MAX_DATA_TASKS.saturating_sub(data_tasks.len()).min(load_data_queue.len());
@@ -226,10 +234,9 @@ pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>
             continue;
         };
         vertex_diagnostic.remove(&chunk_pos);
-        if let Some(mut entity_commands) = commands.get_entity(chunk_id) {
-            entity_commands.despawn();
+        if let Some(entity_commands) = commands.get_entity(chunk_id) {
+            entity_commands.despawn_recursive();
         }
-        // world_data.remove(&chunk_pos);
     }
     unload_mesh_queue.append(&mut retry);
 }
@@ -256,12 +263,21 @@ pub fn start_mesh_tasks(
         ..
     } = voxel_engine.as_mut();
 
-    let scanner_g = scanners.single();
-    let scan_pos = ((scanner_g.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
-    load_mesh_queue.sort_by(|a, b| {
-        a.distance_squared(scan_pos)
-            .cmp(&b.distance_squared(scan_pos))
+    // Order by closest distance to any scanner.
+    // TODO: This could use bevy_spatial for better performance.
+    load_mesh_queue.sort_by_cached_key(|pos| {
+        let mut closest_distance = i32::MAX;
+        for scanner in scanners.iter() {
+            let scan_pos = world_to_chunk(scanner.translation());
+            let distance = pos.distance_squared(scan_pos);
+            if distance < closest_distance {
+                closest_distance = distance;
+            }
+        }
+
+        closest_distance
     });
+
     let tasks_left = (MAX_MESH_TASKS as i32 - mesh_tasks.len() as i32)
         .min(load_mesh_queue.len() as i32)
         .max(0) as usize;

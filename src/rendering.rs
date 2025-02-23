@@ -38,8 +38,10 @@ fn initialize_global_chunk_materials(
     block_registry: Res<BlockRegistryResource>,
 ) {
     let colors = block_registry.0.block_color.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
-
     let colors = buffers.add(ShaderStorageBuffer::from(colors));
+    
+    let emissive = block_registry.0.block_emissive.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
+    let emissive = buffers.add(ShaderStorageBuffer::from(emissive));
 
     // TODO: Add transparent material.
     
@@ -49,13 +51,15 @@ fn initialize_global_chunk_materials(
             perceptual_roughness: 1.0,
             metallic: 0.01,
             block_colors: colors.clone(),
+            block_emissive: emissive.clone(),
             alpha_mode: AlphaMode::Opaque
-        }), 
+        }),
         transparent: chunk_materials.add(ChunkMaterial {
             reflectance: 0.5,
             perceptual_roughness: 1.0,
             metallic: 0.01,
-            block_colors: colors.clone(),
+            block_colors: colors,
+            block_emissive: emissive,
             alpha_mode: AlphaMode::Premultiplied
         }),   
     });
@@ -132,6 +136,9 @@ pub struct ChunkMaterial {
 
     #[storage(1,read_only)]
     pub block_colors: Handle<ShaderStorageBuffer>,
+    
+    #[storage(2,read_only)]
+    pub block_emissive: Handle<ShaderStorageBuffer>,
 
     pub alpha_mode: AlphaMode,
 }

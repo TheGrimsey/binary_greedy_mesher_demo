@@ -36,12 +36,15 @@ pub struct BlockRegistry {
     /// Maps block id to block flags.
     pub block_flags: Vec<BlockFlags>,
     /// Maps block id to block color.
-    pub block_color: Vec<Color>
+    pub block_color: Vec<Color>,
+    pub block_emissive: Vec<Color>
 }
 impl BlockRegistry {
+    #[inline]
     pub fn is_solid(&self, block_id: BlockId) -> bool {
         self.block_flags[block_id.0 as usize].contains(BlockFlags::SOLID)
     }
+    #[inline]
     pub fn has_flag(&self, block_id: BlockId, flag: BlockFlags) -> bool {
         self.block_flags[block_id.0 as usize].contains(flag)
     }
@@ -65,6 +68,7 @@ impl BlockRegistry {
         self.block_id_to_string_identifier.push(identifier.clone());
         self.block_flags.push(flags); 
         self.block_color.push(block.color);
+        self.block_emissive.push(block.emissive_color);
 
         self.block_string_identifier_to_id.insert(identifier, block_id);
 
@@ -90,6 +94,7 @@ pub struct Block {
     pub visibility: BlockVisibilty,
     pub collision: bool,
     pub color: Color,
+    pub emissive_color: Color,
 }
 impl Default for Block {
     fn default() -> Self {
@@ -97,6 +102,7 @@ impl Default for Block {
             visibility: BlockVisibilty::Solid,
             collision: true,
             color: Color::srgb(1.0, 0.0, 1.0),
+            emissive_color: Color::NONE,
         }
     }
 }
