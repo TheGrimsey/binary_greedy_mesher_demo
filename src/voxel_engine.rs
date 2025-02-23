@@ -10,7 +10,7 @@ use bevy_screen_diagnostics::{Aggregate, ScreenDiagnostics};
 use indexmap::IndexSet;
 
 use crate::{
-    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::{ADJACENT_CHUNK_DIRECTIONS, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkTrackerPlugin, DataScanner, MeshScanner, ScannerPlugin, ScannerTwo}, utils::{get_edging_chunk, vec3_to_index, world_to_chunk}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
+    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::{ADJACENT_CHUNK_DIRECTIONS, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, ScannerPlugin, ScannerTwo}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
 };
 use futures_lite::future;
 
@@ -176,7 +176,7 @@ impl Default for VoxelEngine {
 /// begin data building tasks for chunks in range
 pub fn start_data_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
-    scanners: Query<&GlobalTransform, With<ScannerTwo<DataScanner>>>,
+    scanners: Query<&ChunkPos, With<ScannerTwo<DataScanner>>>,
     mut chunk_gained_data_relevance: EventReader<ChunkGainedScannerRelevance<DataScanner>>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
@@ -197,9 +197,8 @@ pub fn start_data_tasks(
         load_data_queue.sort_by_cached_key(|pos| {
             let mut closest_distance = i32::MAX;
             // TODO: This could use bevy_spatial for better performance.
-            for scanner in scanners.iter() {
-                let scan_pos = world_to_chunk(scanner.translation());
-                let distance = pos.distance_squared(scan_pos);
+            for scan_pos in scanners.iter() {
+                let distance = pos.distance_squared(scan_pos.0);
                 if distance < closest_distance {
                     closest_distance = distance;
                 }
@@ -279,7 +278,7 @@ pub struct MeshTask {
 /// begin mesh building tasks for chunks in range
 pub fn start_mesh_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
-    scanners: Query<&GlobalTransform, With<ScannerTwo<MeshScanner>>>,
+    scanners: Query<&ChunkPos, With<ScannerTwo<MeshScanner>>>,
     block_registry: Res<BlockRegistryResource>,
     mut chunk_gained_mesh_relevance: EventReader<ChunkGainedScannerRelevance<MeshScanner>>,
 ) {
@@ -305,9 +304,8 @@ pub fn start_mesh_tasks(
         load_mesh_queue.sort_by_cached_key(|pos| {
             let mut closest_distance = i32::MAX;
             // TODO: This could use bevy_spatial for better performance.
-            for scanner in scanners.iter() {
-                let scan_pos = world_to_chunk(scanner.translation());
-                let distance = pos.distance_squared(scan_pos);
+            for scan_pos in scanners.iter() {
+                let distance = pos.distance_squared(scan_pos.0);
                 if distance < closest_distance {
                     closest_distance = distance;
                 }
