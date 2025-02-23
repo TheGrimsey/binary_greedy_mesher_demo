@@ -7,9 +7,10 @@ use bevy::{
     utils::{HashMap, HashSet},
 };
 use bevy_screen_diagnostics::{Aggregate, ScreenDiagnostics};
+use indexmap::IndexSet;
 
 use crate::{
-    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::CHUNK_SIZE3, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::Scanner, utils::{get_edging_chunk, vec3_to_index, world_to_chunk}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
+    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::{ADJACENT_CHUNK_DIRECTIONS, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkTrackerPlugin, DataScanner, MeshScanner, ScannerPlugin, ScannerTwo}, utils::{get_edging_chunk, vec3_to_index, world_to_chunk}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
 };
 use futures_lite::future;
 
@@ -22,7 +23,13 @@ impl Plugin for VoxelEnginePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<VoxelEngine>();
 
-        app.add_plugins(ChunkEventsPlugin);
+        app.add_plugins((
+            ChunkEventsPlugin,
+            ChunkTrackerPlugin,
+            ScannerPlugin::<DataScanner>::default(),
+            ScannerPlugin::<MeshScanner>::default(),
+        ));
+        
 
         app.add_systems(PostUpdate, (start_data_tasks, start_mesh_tasks));
         app.add_systems(Update, start_modifications);
@@ -55,8 +62,9 @@ pub enum MeshingMethod {
 pub struct VoxelEngine {
     pub world_data: HashMap<IVec3, Arc<ChunkData>>,
     pub vertex_diagnostic: HashMap<IVec3, i32>,
-    pub load_data_queue: Vec<IVec3>,
-    pub load_mesh_queue: Vec<IVec3>,
+    // Using index map to only load a chunk once & still be able to sort.
+    pub load_data_queue: IndexSet<IVec3>,
+    pub load_mesh_queue: IndexSet<IVec3>,
     pub unload_data_queue: Vec<IVec3>,
     pub unload_mesh_queue: Vec<IVec3>,
     pub data_tasks: HashMap<IVec3, Option<Task<ChunkData>>>,
@@ -133,7 +141,7 @@ fn diagnostics_count(mut diagnostics: Diagnostics, voxel_engine: Res<VoxelEngine
 }
 
 impl VoxelEngine {
-    pub fn unload_all_meshes(&mut self, scanner: &Scanner, scanner_transform: &GlobalTransform) {
+    /*pub fn unload_all_meshes(&mut self, scanner: &Scanner, scanner_transform: &GlobalTransform) {
         // stop all any current proccessing
         self.load_mesh_queue.clear();
         self.mesh_tasks.clear();
@@ -141,17 +149,17 @@ impl VoxelEngine {
             ((scanner_transform.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
         for offset in &scanner.mesh_sampling_offsets {
             let wpos = scan_pos + *offset;
-            self.load_mesh_queue.push(wpos);
+            self.load_mesh_queue.insert(wpos);
         }
-    }
+    }*/
 }
 
 impl Default for VoxelEngine {
     fn default() -> Self {
         VoxelEngine {
             world_data: HashMap::new(),
-            load_data_queue: Vec::new(),
-            load_mesh_queue: Vec::new(),
+            load_data_queue: IndexSet::new(),
+            load_mesh_queue: IndexSet::new(),
             unload_data_queue: Vec::new(),
             unload_mesh_queue: Vec::new(),
             data_tasks: HashMap::new(),
@@ -168,7 +176,8 @@ impl Default for VoxelEngine {
 /// begin data building tasks for chunks in range
 pub fn start_data_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
-    scanners: Query<&GlobalTransform, With<Scanner>>,
+    scanners: Query<&GlobalTransform, With<ScannerTwo<DataScanner>>>,
+    mut chunk_gained_data_relevance: EventReader<ChunkGainedScannerRelevance<DataScanner>>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -178,20 +187,27 @@ pub fn start_data_tasks(
         ..
     } = voxel_engine.as_mut();
 
-    // Order by closest distance to any scanner.
-    // TODO: This could use bevy_spatial for better performance.
-    load_data_queue.sort_by_cached_key(|pos| {
-        let mut closest_distance = i32::MAX;
-        for scanner in scanners.iter() {
-            let scan_pos = world_to_chunk(scanner.translation());
-            let distance = pos.distance_squared(scan_pos);
-            if distance < closest_distance {
-                closest_distance = distance;
-            }
-        }
+    load_data_queue.extend(chunk_gained_data_relevance.read().map(|e| e.chunk));
 
-        closest_distance
-    });
+    // Order by closest distance to any scanner.
+    {
+        let _span = info_span!("Sorting data queue by distance to scanners").entered();
+
+        // TODO: With many chunks in queue, this is SLOW.
+        load_data_queue.sort_by_cached_key(|pos| {
+            let mut closest_distance = i32::MAX;
+            // TODO: This could use bevy_spatial for better performance.
+            for scanner in scanners.iter() {
+                let scan_pos = world_to_chunk(scanner.translation());
+                let distance = pos.distance_squared(scan_pos);
+                if distance < closest_distance {
+                    closest_distance = distance;
+                }
+            }
+    
+            closest_distance
+        });
+    }
 
     let tasks_left = MAX_DATA_TASKS.saturating_sub(data_tasks.len()).min(load_data_queue.len());
     for world_pos in load_data_queue.drain(0..tasks_left) {
@@ -207,29 +223,41 @@ pub fn start_data_tasks(
 pub fn unload_data(
     mut voxel_engine: ResMut<VoxelEngine>,
     mut events: EventWriter<ChunkUnloaded>,
+    mut chunk_lost_data_relevance: EventReader<ChunkLostScannerRelevance<DataScanner>>
 ) {
     let VoxelEngine {
         unload_data_queue,
         world_data,
+        load_data_queue,
         ..
     } = voxel_engine.as_mut();
+
+    unload_data_queue.extend(chunk_lost_data_relevance.read().map(|e| e.chunk));
 
     events.send_batch(unload_data_queue.iter().copied().map(ChunkUnloaded));
 
     for chunk_pos in unload_data_queue.drain(..) {
+        load_data_queue.swap_remove(&chunk_pos);
         world_data.remove(&chunk_pos);
     }
 }
 
 /// destroy enqueued, chunk mesh entities
-pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>) {
+pub fn unload_mesh(
+    mut commands: Commands,
+    mut voxel_engine: ResMut<VoxelEngine>,
+    mut chunk_lost_mesh_relevance: EventReader<ChunkLostScannerRelevance<MeshScanner>>
+) {
     let VoxelEngine {
         unload_mesh_queue,
+        load_mesh_queue,
         chunk_entities,
         vertex_diagnostic,
         ..
     } = voxel_engine.as_mut();
-    let mut retry = Vec::new();
+
+    unload_mesh_queue.extend(chunk_lost_mesh_relevance.read().map(|e| e.chunk));
+
     for chunk_pos in unload_mesh_queue.drain(..) {
         let Some(chunk_id) = chunk_entities.remove(&chunk_pos) else {
             continue;
@@ -238,8 +266,9 @@ pub fn unload_mesh(mut commands: Commands, mut voxel_engine: ResMut<VoxelEngine>
         if let Some(entity_commands) = commands.get_entity(chunk_id) {
             entity_commands.despawn_recursive();
         }
+
+        load_mesh_queue.swap_remove(&chunk_pos);
     }
-    unload_mesh_queue.append(&mut retry);
 }
 
 pub struct MeshTask {
@@ -250,8 +279,9 @@ pub struct MeshTask {
 /// begin mesh building tasks for chunks in range
 pub fn start_mesh_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
-    scanners: Query<&GlobalTransform, With<Scanner>>,
+    scanners: Query<&GlobalTransform, With<ScannerTwo<MeshScanner>>>,
     block_registry: Res<BlockRegistryResource>,
+    mut chunk_gained_mesh_relevance: EventReader<ChunkGainedScannerRelevance<MeshScanner>>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -264,26 +294,54 @@ pub fn start_mesh_tasks(
         ..
     } = voxel_engine.as_mut();
 
-    // Order by closest distance to any scanner.
-    // TODO: This could use bevy_spatial for better performance.
-    load_mesh_queue.sort_by_cached_key(|pos| {
-        let mut closest_distance = i32::MAX;
-        for scanner in scanners.iter() {
-            let scan_pos = world_to_chunk(scanner.translation());
-            let distance = pos.distance_squared(scan_pos);
-            if distance < closest_distance {
-                closest_distance = distance;
+    load_mesh_queue.extend(chunk_gained_mesh_relevance.read().map(|e| e.chunk));
+
+    // Order by FURTHEST distance to any scanner.
+    // Closest chunks are at the end.
+    // We do this so we can pop from the end of the list.
+    {
+        // TODO: With many chunks in queue, this is SLOW.
+        let _span = info_span!("Sorting meshing queue by distance to scanners").entered();
+        load_mesh_queue.sort_by_cached_key(|pos| {
+            let mut closest_distance = i32::MAX;
+            // TODO: This could use bevy_spatial for better performance.
+            for scanner in scanners.iter() {
+                let scan_pos = world_to_chunk(scanner.translation());
+                let distance = pos.distance_squared(scan_pos);
+                if distance < closest_distance {
+                    closest_distance = distance;
+                }
             }
-        }
 
-        closest_distance
-    });
+            -closest_distance
+        });
+    }
 
+    // We can't use extract_if yet, so we have to do this manually.
     let tasks_left = (MAX_MESH_TASKS as i32 - mesh_tasks.len() as i32)
         .min(load_mesh_queue.len() as i32)
         .max(0) as usize;
-    for world_pos in load_mesh_queue.drain(0..tasks_left) {
-        // for world_pos in load_mesh_queue.drain(..) {
+    let mut chunks_to_generate = Vec::with_capacity(tasks_left);
+
+    let mut i = load_mesh_queue.len() - 1;
+    while let Some(world_pos) = load_mesh_queue.get_index(i).copied() {
+        // We can only generate a mesh if all neighbors are available.
+        let all_neighbors_available = ADJACENT_CHUNK_DIRECTIONS.iter().all(|&dir| {
+            world_data.contains_key(&(world_pos + dir))
+        });
+
+        if all_neighbors_available {
+            chunks_to_generate.push(world_pos);
+            load_mesh_queue.swap_remove(&world_pos);
+
+            if chunks_to_generate.len() >= tasks_left {
+                break;
+            }
+        }
+        i -= 1;
+    }
+
+    for world_pos in chunks_to_generate {
         let Some(chunks_refs) = ChunksRefs::try_new(world_data, world_pos) else {
             continue;
         };

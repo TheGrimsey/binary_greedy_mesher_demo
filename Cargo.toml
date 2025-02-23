@@ -14,6 +14,7 @@ bevy_screen_diagnostics = { git = "https://github.com/mlupo19/bevy_screen_diagno
 bitflags = "2.8.0"
 bracket-noise = "0.8.7"
 futures-lite = "2.2.0"
+indexmap = "2.7.1"
 rand = "0.9"
 rand_chacha = "0.9"
 tinyvec = "1.6.0"
