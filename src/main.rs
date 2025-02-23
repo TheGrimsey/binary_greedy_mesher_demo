@@ -122,10 +122,10 @@ pub fn setup(
         }.build()
     ));
     // uncomment for scanner at origin position
-    // commands.spawn((
-    //     TransformBundle::from_transform(Transform::from_translation(Vec3::ZERO)),
-    // Scanner::new(10),
-    // ));
+    commands.spawn((
+        Transform::default(),
+        Scanner::new(10),
+    ));
 
     commands
         .spawn((

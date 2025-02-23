@@ -1,4 +1,4 @@
-use bevy::{asset::RenderAssetUsages, math::IVec3, render::{mesh::{Indices, Mesh, PrimitiveTopology}, primitives::Aabb}};
+use bevy::{asset::RenderAssetUsages, math::{IVec3, Vec3}, render::{mesh::{Indices, Mesh, PrimitiveTopology}, primitives::Aabb}};
 
 use crate::{rendering::ATTRIBUTE_VOXEL, utils::get_pos_from_vertex_u32};
 
@@ -30,5 +30,13 @@ impl ChunkMesh {
         });
 
         Aabb::from_min_max(min.as_vec3(), max.as_vec3())
+    }
+
+    /// Converts the chunk mesh into a regular "uncompressed" mesh that can be used for collision or other purposes.
+    pub fn into_uncompressed_mesh(self) -> (Vec<u32>, Vec<Vec3>) {
+        (
+            self.indices,
+            self.vertices.into_iter().map(|vertex| get_pos_from_vertex_u32(vertex).as_vec3()).collect()
+        )
     }
 }

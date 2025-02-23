@@ -9,15 +9,7 @@ use bevy::{
 use bevy_screen_diagnostics::{Aggregate, ScreenDiagnostics};
 
 use crate::{
-    chunk::ChunkData,
-    chunk_mesh::ChunkMesh,
-    chunks_refs::ChunksRefs,
-    constants::CHUNK_SIZE_I32,
-    lod::Lod,
-    rendering::{ChunkEntityType, GlobalChunkMaterial},
-    scanner::Scanner,
-    utils::{get_edging_chunk, vec3_to_index, world_to_chunk},
-    voxel::{load_block_registry, BlockData, BlockFlags, BlockId, BlockRegistryResource},
+    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::CHUNK_SIZE3, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::Scanner, utils::{get_edging_chunk, vec3_to_index, world_to_chunk}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
 };
 use futures_lite::future;
 
@@ -29,6 +21,9 @@ pub const MAX_MESH_TASKS: usize = 32;
 impl Plugin for VoxelEnginePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<VoxelEngine>();
+
+        app.add_plugins(ChunkEventsPlugin);
+
         app.add_systems(PostUpdate, (start_data_tasks, start_mesh_tasks));
         app.add_systems(Update, start_modifications);
         app.add_systems(
@@ -209,12 +204,18 @@ pub fn start_data_tasks(
 }
 
 /// destroy enqueued, chunk data
-pub fn unload_data(mut voxel_engine: ResMut<VoxelEngine>) {
+pub fn unload_data(
+    mut voxel_engine: ResMut<VoxelEngine>,
+    mut events: EventWriter<ChunkUnloaded>,
+) {
     let VoxelEngine {
         unload_data_queue,
         world_data,
         ..
     } = voxel_engine.as_mut();
+
+    events.send_batch(unload_data_queue.iter().copied().map(ChunkUnloaded));
+
     for chunk_pos in unload_data_queue.drain(..) {
         world_data.remove(&chunk_pos);
     }
@@ -303,7 +304,11 @@ pub fn start_mesh_tasks(
 }
 
 // start
-pub fn start_modifications(mut voxel_engine: ResMut<VoxelEngine>) {
+pub fn start_modifications(
+    mut voxel_engine: ResMut<VoxelEngine>,
+    mut events: EventWriter<ChunkModified>,
+    mut updated_and_adjecant_chunks_set: Local<HashSet<IVec3>>,
+) {
     let VoxelEngine {
         world_data,
         chunk_modifications,
@@ -316,32 +321,30 @@ pub fn start_modifications(mut voxel_engine: ResMut<VoxelEngine>) {
             continue;
         };
         let new_chunk_data = Arc::make_mut(chunk_data);
-        let mut adj_chunk_set = HashSet::new();
         for ChunkModification(local_pos, block_type) in mods.into_iter() {
             let i = vec3_to_index(local_pos, 32);
             if new_chunk_data.voxels.len() == 1 {
-                let mut voxels = vec![];
-                for _ in 0..CHUNK_SIZE_I32 * CHUNK_SIZE_I32 * CHUNK_SIZE_I32 {
-                    voxels.push(BlockData {
-                        block_type: new_chunk_data.voxels[0].block_type,
-                    });
-                }
-                new_chunk_data.voxels = voxels;
+                let value = new_chunk_data.voxels[0];
+                new_chunk_data.voxels.resize(CHUNK_SIZE3, value);
             }
             new_chunk_data.voxels[i].block_type = block_type;
             if let Some(edge_chunk) = get_edging_chunk(local_pos) {
-                adj_chunk_set.insert(edge_chunk);
+                updated_and_adjecant_chunks_set.insert(pos + edge_chunk);
             }
         }
-        for adj_chunk in adj_chunk_set.into_iter() {
-            load_mesh_queue.push(pos + adj_chunk);
-        }
-        load_mesh_queue.push(pos);
+        updated_and_adjecant_chunks_set.insert(pos);
+        
+        events.send(ChunkModified(pos));
     }
+
+    load_mesh_queue.extend(updated_and_adjecant_chunks_set.drain());
 }
 
 /// join the chunkdata threads
-pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>) {
+pub fn join_data(
+    mut voxel_engine: ResMut<VoxelEngine>,
+    mut events: EventWriter<ChunkGenerated>
+) {
     let VoxelEngine {
         world_data,
         data_tasks,
@@ -359,6 +362,7 @@ pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>) {
         };
 
         world_data.insert(*world_pos, Arc::new(chunk_data));
+        events.send(ChunkGenerated(*world_pos));
     }
     data_tasks.retain(|_k, op| op.is_some());
 }
