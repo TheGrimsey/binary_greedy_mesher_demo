@@ -16,7 +16,7 @@ use new_voxel_testing::{
     rendering::{
         ChunkMaterial, ChunkMaterialWireframe, GlobalChunkWireframeMaterial,
         RenderingPlugin,
-    }, scanner::{DataScanner, MeshScanner, ScannerTwo}, sun::{Sun, SunPlugin}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
+    }, scanner::{DataScanner, MeshScanner, Scanner}, sun::{Sun, SunPlugin}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
 
 use bevy_flycam::prelude::*;
@@ -118,14 +118,14 @@ pub fn setup(
     // uncomment for scanner at origin position
     commands.spawn((
         Transform::default(),
-        ScannerTwo::<DataScanner>::new(10),
-        ScannerTwo::<MeshScanner>::new(9), 
+        Scanner::<DataScanner>::new(10, Some(5)),
+        Scanner::<MeshScanner>::new(9, Some(4)), 
     ));
 
     commands
         .spawn((
-            ScannerTwo::<DataScanner>::new(33),
-            ScannerTwo::<MeshScanner>::new(32), 
+            Scanner::<DataScanner>::new(33, Some(8)),
+            Scanner::<MeshScanner>::new(32, Some(8)), 
             Camera3d::default(),
             Transform::from_xyz(0.0, 2.0, 0.5),
             Msaa::Off,

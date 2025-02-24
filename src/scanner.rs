@@ -19,6 +19,8 @@ impl Plugin for ChunkTrackerPlugin {
             PreUpdate,
             update_chunk_pos.run_if(any_with_component::<TrackChunkPos>),
         );
+
+        app.register_type::<ChunkPos>();
     }
 }
 
@@ -33,7 +35,7 @@ impl<T: Send + Sync + Default + 'static> Plugin for ScannerPlugin<T> {
 
         app.add_systems(
             PreUpdate,
-            scan::<T>.after(update_chunk_pos).run_if(any_with_component::<ScannerTwo<T>>.or(any_component_removed::<ScannerTwo<T>>)),
+            scan::<T>.after(update_chunk_pos).run_if(any_with_component::<Scanner<T>>.or(any_component_removed::<Scanner<T>>)),
         );
 
         app.add_event::<ChunkGainedScannerRelevance<T>>()
@@ -45,14 +47,16 @@ impl<T: Send + Sync + Default + 'static> Plugin for ScannerPlugin<T> {
 #[require(ChunkPos, GlobalTransform)]
 pub struct TrackChunkPos;
 
-#[derive(Component, Default, PartialEq, Eq)]
+#[derive(Component, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
 pub struct ChunkPos(pub IVec3);
 
 /// Iterates over chunks in a box around the center, within the given radius.
-fn iter_chunks_around(center: IVec3, radius: i32) -> impl Iterator<Item = IVec3> {
-    let r = radius + 1;
+fn iter_chunks_around(center: IVec3, horizontal_radius: i32, vertical_radius: i32) -> impl Iterator<Item = IVec3> {
+    let r = horizontal_radius + 1;
+    let v_r = vertical_radius + 1;
     (-r..r).flat_map(move |x| {
-        (-r..r).flat_map(move |y| {
+        (-v_r..v_r).flat_map(move |y| {
             (-r..r).map(move |z| {
                 IVec3::new(x, y, z) + center
             })
@@ -70,8 +74,9 @@ fn update_chunk_pos(
 
 #[derive(Component)]
 #[require(TrackChunkPos)]
-pub struct ScannerTwo<T: Send + Sync + 'static> {
-    radius: u8,
+pub struct Scanner<T: Send + Sync + 'static> {
+    horizontal_radius: u8,
+    vertical_radius: u8,
 
     /// Chunks this scanner wants to load.
     /// Checked by the global collector.
@@ -79,11 +84,12 @@ pub struct ScannerTwo<T: Send + Sync + 'static> {
 
     phantom_data: PhantomData<T>
 }
-impl<T: Send + Sync + 'static> ScannerTwo::<T> {
-    pub fn new(radius: u8) -> Self {
+impl<T: Send + Sync + 'static> Scanner::<T> {
+    pub fn new(horizontal_radius: u8, vertical_radius: Option<u8>) -> Self {
         Self {
-            radius,
-            desired_chunks: HashSet::with_capacity(radius as usize * radius as usize * radius as usize),
+            horizontal_radius,
+            vertical_radius: vertical_radius.unwrap_or(horizontal_radius),
+            desired_chunks: HashSet::with_capacity(horizontal_radius as usize * vertical_radius.unwrap_or(horizontal_radius) as usize * horizontal_radius as usize),
             phantom_data: PhantomData
         }
     }
@@ -113,42 +119,38 @@ pub struct ChunkLostScannerRelevance<T: Send + Sync + Default + 'static> {
 }
 
 pub fn scan<T: Send + Sync + Default + 'static>(
-    mut query: ParamSet<(
-        Query<(&mut ScannerTwo<T>, &ChunkPos), Changed<ChunkPos>>,
-        Query<&ScannerTwo<T>>,
-    )>,
+    any_changed_query: Query<(), (With<Scanner<T>>, Changed<ChunkPos>)>,
+    scanners: Query<(&Scanner<T>, &ChunkPos)>,
     mut global_desired_chunks: ResMut<GlobalScannerDesiredChunks<T>>,
     mut current_desired_chunks: Local<HashSet<IVec3>>,
     mut gained_relevance_events: EventWriter<ChunkGainedScannerRelevance<T>>,
     mut lost_relevance_events: EventWriter<ChunkLostScannerRelevance<T>>,
-    mut removed_scanners: RemovedComponents<ScannerTwo<T>>,
+    mut removed_scanners: RemovedComponents<Scanner<T>>,
 ) {
-    let mut updated_any = false;
-
-    query.p0().iter_mut().for_each(|(mut scanner, chunk_pos)| {
-        let radius = scanner.radius as i32;
-
-        scanner.desired_chunks.clear();
-        scanner.desired_chunks.extend(iter_chunks_around(chunk_pos.0, radius));
-
-        updated_any = true;
-    });
-
-    if !updated_any && removed_scanners.read().next().is_none() {
+    if any_changed_query.is_empty() && removed_scanners.read().next().is_none() {
         return;
     }
 
     // Update the global collector.
-    current_desired_chunks.clear();
-    for scanner in query.p1().iter() {
-        current_desired_chunks.extend(&scanner.desired_chunks);
+    {
+        let _span = info_span!("Filling globally desired chunks.").entered();
+        current_desired_chunks.clear();
+        for (scanner, chunk_pos) in scanners.iter() {
+            current_desired_chunks.extend(iter_chunks_around(chunk_pos.0, scanner.horizontal_radius as i32, scanner.vertical_radius as i32));
+        }
     }
 
-    let newly_desired_chunks = current_desired_chunks.difference(&global_desired_chunks.chunks);
-    gained_relevance_events.send_batch(newly_desired_chunks.into_iter().map(|&chunk| ChunkGainedScannerRelevance { chunk, phantom_data: PhantomData }));
+    {
+        let _span = info_span!("Finding newly desired chunks.").entered();
+        let newly_desired_chunks = current_desired_chunks.difference(&global_desired_chunks.chunks);
+        gained_relevance_events.send_batch(newly_desired_chunks.into_iter().map(|&chunk| ChunkGainedScannerRelevance { chunk, phantom_data: PhantomData }));
+    }
 
-    let no_longer_desired_chunks = global_desired_chunks.chunks.difference(&current_desired_chunks);
-    lost_relevance_events.send_batch(no_longer_desired_chunks.into_iter().map(|&chunk| ChunkLostScannerRelevance { chunk, phantom_data: PhantomData }));
+    {
+        let _span = info_span!("Finding no longer desired chunks.").entered();
+        let no_longer_desired_chunks = global_desired_chunks.chunks.difference(&current_desired_chunks);
+        lost_relevance_events.send_batch(no_longer_desired_chunks.into_iter().map(|&chunk| ChunkLostScannerRelevance { chunk, phantom_data: PhantomData }));
+    }
 
     // Swap the lists because it's faster than copying.
     std::mem::swap(&mut global_desired_chunks.chunks, &mut current_desired_chunks);
