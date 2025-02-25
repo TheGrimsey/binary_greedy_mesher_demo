@@ -136,7 +136,8 @@ fn test_generate() {
     let _ = generate(IVec3::new(0, 0, 0));
 }
 
-struct NoiseDownSampler {
+#[derive(Debug, Clone)]
+pub struct NoiseDownSampler {
     samples: Box<[f32]>,
     upsampling: i32,
     min_point: IVec2,
