@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    chunk::ChunkData,
+    chunk::{generate, ChunkData},
     quad::Direction,
     utils::{index_to_ivec3_bounds, vec3_to_index},
     voxel::BlockData,
@@ -68,7 +68,7 @@ impl ChunksRefs {
         );
         for i in 0..3 * 3 * 3 {
             let offset = index_to_ivec3_bounds(i, 3) + IVec3::NEG_ONE;
-            chunks.push(Arc::new(ChunkData::generate(pos + offset)));
+            chunks.push(Arc::new(generate(pos + offset)));
         }
         ChunksRefs { chunks }
     }

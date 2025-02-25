@@ -33,6 +33,7 @@ impl Plugin for RenderingPlugin {
 
 fn initialize_global_chunk_materials(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    mut chunk_materials_wireframe: ResMut<Assets<ChunkMaterialWireframe>>,
     mut chunk_materials: ResMut<Assets<ChunkMaterial>>,
     mut commands: Commands,
     block_registry: Res<BlockRegistryResource>,
@@ -58,11 +59,22 @@ fn initialize_global_chunk_materials(
             reflectance: 0.5,
             perceptual_roughness: 1.0,
             metallic: 0.01,
-            block_colors: colors,
-            block_emissive: emissive,
+            block_colors: colors.clone(),
+            block_emissive: emissive.clone(),
             alpha_mode: AlphaMode::Premultiplied
         }),   
     });
+
+    
+    commands.insert_resource(GlobalChunkWireframeMaterial(chunk_materials_wireframe.add(
+        ChunkMaterialWireframe {
+            reflectance: 0.5,
+            perceptual_roughness: 1.0,
+            metallic: 0.01,
+            block_colors: colors.clone(),
+            block_emissive: emissive.clone(),
+        },
+    )));
 }
 
 fn apply_chunk_material(
@@ -183,6 +195,12 @@ pub struct ChunkMaterialWireframe {
     pub perceptual_roughness: f32,
     #[uniform(0)]
     pub metallic: f32,
+    
+    #[storage(1,read_only)]
+    pub block_colors: Handle<ShaderStorageBuffer>,
+    
+    #[storage(2,read_only)]
+    pub block_emissive: Handle<ShaderStorageBuffer>,
 }
 
 impl Material for ChunkMaterialWireframe {

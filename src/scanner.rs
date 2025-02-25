@@ -78,10 +78,6 @@ pub struct Scanner<T: Send + Sync + 'static> {
     horizontal_radius: u8,
     vertical_radius: u8,
 
-    /// Chunks this scanner wants to load.
-    /// Checked by the global collector.
-    desired_chunks: HashSet<IVec3>,
-
     phantom_data: PhantomData<T>
 }
 impl<T: Send + Sync + 'static> Scanner::<T> {
@@ -89,7 +85,6 @@ impl<T: Send + Sync + 'static> Scanner::<T> {
         Self {
             horizontal_radius,
             vertical_radius: vertical_radius.unwrap_or(horizontal_radius),
-            desired_chunks: HashSet::with_capacity(horizontal_radius as usize * vertical_radius.unwrap_or(horizontal_radius) as usize * horizontal_radius as usize),
             phantom_data: PhantomData
         }
     }

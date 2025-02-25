@@ -13,11 +13,22 @@ use crate::{
     utils::{generate_indices, make_vertex_u32, vec3_to_index}, voxel::{BlockFlags, BlockRegistry},
 };
 
-pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
+/// Builds a greedy mesh
+/// `flag_to_build`
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<BlockRegistry>, flag_to_build: BlockFlags, calculate_ao: bool, ignore_block_type: bool) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
     }
+    
+    /*  When we ignore block type:
+    *   - !true == false == 0
+    *   - !0 == u32::MAX
+    *   We can use this to set block type to 0 when we don't care about it.
+    *   Not caring about block type is useful for collision meshes, where we only care about solid blocks.
+     */
+    let ignore_block_type_mask = -(!ignore_block_type as i32) as u32;
+
     let mut mesh = ChunkMesh::default();
 
     // solid binary for each x,y,z axis (3)
@@ -168,7 +179,9 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
                     let current_voxel = chunks_refs.get_block_no_neighbour(voxel_pos);
                     // let current_voxel = chunks_refs.get_block(voxel_pos);
                     // we can only greedy mesh same block types + same ambient occlusion
-                    let block_hash = ao_index | ((current_voxel.block_type.0) << 9);
+
+                    let block_type = current_voxel.block_type.0 as u32 & ignore_block_type_mask;
+                    let block_hash = ao_index | (block_type << 9);
                     let data = data[axis]
                         .entry(block_hash)
                         .or_default()

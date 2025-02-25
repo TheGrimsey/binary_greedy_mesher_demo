@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 #[inline]
-pub fn index_to_ivec3(i: i32) -> IVec3 {
+pub fn index_to_ivec3(i: usize) -> IVec3 {
     let x = i % 32;
     let y = (i / 32) % 32;
     let z = i / (32 * 32);
-    IVec3::new(x, y, z)
+    IVec3::new(x as i32, y as i32, z as i32)
 }
 
 #[inline]

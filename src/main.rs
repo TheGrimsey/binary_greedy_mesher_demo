@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, sync::Arc};
 
 use bevy::{
     color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
@@ -13,8 +13,8 @@ use bevy_screen_diagnostics::{
 };
 
 use new_voxel_testing::{
-    rendering::{
-        ChunkMaterial, ChunkMaterialWireframe, GlobalChunkWireframeMaterial,
+    chunk::{self, ChunkGenerator}, rendering::{
+        ChunkMaterial,
         RenderingPlugin,
     }, scanner::{DataScanner, MeshScanner, Scanner}, sun::{Sun, SunPlugin}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
@@ -91,7 +91,6 @@ pub fn modify_current_terrain(
 
 pub fn setup(
     mut commands: Commands,
-    mut chunk_materials_wireframe: ResMut<Assets<ChunkMaterialWireframe>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
@@ -124,8 +123,8 @@ pub fn setup(
 
     commands
         .spawn((
-            Scanner::<DataScanner>::new(33, Some(8)),
-            Scanner::<MeshScanner>::new(32, Some(8)), 
+            Scanner::<DataScanner>::new(16, Some(7)),
+            Scanner::<MeshScanner>::new(15, Some(6)), 
             Camera3d::default(),
             Transform::from_xyz(0.0, 2.0, 0.5),
             Msaa::Off,
@@ -133,18 +132,14 @@ pub fn setup(
         ))
         .insert(FlyCam);
 
-    commands.insert_resource(GlobalChunkWireframeMaterial(chunk_materials_wireframe.add(
-        ChunkMaterialWireframe {
-            reflectance: 0.5,
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
-        },
-    )));
-
     // circular base in origin
     commands.spawn((
         Mesh3d(meshes.add(Circle::new(22.0))),
         MeshMaterial3d(materials.add(Color::from(css::GREEN))),
         Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
     ));
+
+    commands.insert_resource(ChunkGenerator {
+        generate: Arc::new(chunk::generate)
+    });
 }

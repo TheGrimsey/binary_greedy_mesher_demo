@@ -12,7 +12,7 @@ pub struct BlockStringIdentifier(pub Box<str>);
 /// 
 /// These ids do not have gaps.
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BlockId(pub u32);
+pub struct BlockId(pub u16);
 
 bitflags::bitflags! {
     /// Represents a set of flags.
@@ -63,7 +63,7 @@ impl BlockRegistry {
             flags |= BlockFlags::COLLISION;
         }
 
-        let block_id = BlockId(self.block_id_to_string_identifier.len() as u32);
+        let block_id = BlockId(self.block_id_to_string_identifier.len() as u16);
         
         self.block_id_to_string_identifier.push(identifier.clone());
         self.block_flags.push(flags); 
@@ -120,6 +120,8 @@ pub(super) fn load_block_registry(
     let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.3, 0.4, 0.0), ..default() });
 
     let _ = block_registry.add_block(BlockStringIdentifier(Box::from("glass")), &Block { visibility: BlockVisibilty::Transparent, color: Color::srgba(0.3, 0.3, 0.3, 0.5), ..default() });
+
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgba(0.1, 0.1, 0.1, 1.0), ..default() });
 
     commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 }

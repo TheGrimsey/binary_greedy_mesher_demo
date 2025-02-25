@@ -10,7 +10,7 @@ use bevy_screen_diagnostics::{Aggregate, ScreenDiagnostics};
 use indexmap::IndexSet;
 
 use crate::{
-    chunk::ChunkData, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::{ADJACENT_CHUNK_DIRECTIONS, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, ScannerPlugin, Scanner}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
+    chunk::{ChunkData, ChunkGenerator}, chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::{ADJACENT_CHUNK_DIRECTIONS, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, rendering::{ChunkEntityType, GlobalChunkMaterial}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, Scanner, ScannerPlugin}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockFlags, BlockId, BlockRegistryResource}
 };
 use futures_lite::future;
 
@@ -178,6 +178,7 @@ pub fn start_data_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
     scanners: Query<&ChunkPos, With<Scanner<DataScanner>>>,
     mut chunk_gained_data_relevance: EventReader<ChunkGainedScannerRelevance<DataScanner>>,
+    chunk_generator: Res<ChunkGenerator>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -211,8 +212,9 @@ pub fn start_data_tasks(
     let tasks_left = MAX_DATA_TASKS.saturating_sub(data_tasks.len()).min(load_data_queue.len());
     for world_pos in load_data_queue.drain(0..tasks_left) {
         let k = world_pos;
+        let generate = chunk_generator.generate.clone();
         let task = task_pool.spawn(async move {
-            ChunkData::generate(k)
+            generate(k)
         });
         data_tasks.insert(world_pos, Some(task));
     }
@@ -349,8 +351,8 @@ pub fn start_mesh_tasks(
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
-                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID, true),
-                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT, true)
+                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID, true, false),
+                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT, true, false)
                 }
             }),
         };
