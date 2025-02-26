@@ -1,16 +1,19 @@
 use bevy::{
-    pbr::{MaterialPipeline, MaterialPipelineKey},
-    prelude::*,
-    render::{
+    asset::load_internal_asset, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayoutRef},
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
             SpecializedMeshPipelineError, VertexFormat,
         }, storage::ShaderStorageBuffer,
-    },
+    }
 };
 
 use crate::voxel::BlockRegistryResource;
+
+
+pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(138165523578389129966343978676199385893);
+pub const CHUNK_PREPASS_HANDLE: Handle<Shader> = Handle::weak_from_u128(38749848998489157831713083983198931828);
 
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
@@ -28,6 +31,20 @@ impl Plugin for RenderingPlugin {
 
         app.add_systems(Startup, initialize_global_chunk_materials);
         app.add_systems(Update, apply_chunk_material);
+
+        load_internal_asset!(
+            app,
+            CHUNK_SHADER_HANDLE,
+            "chunk.wgsl",
+            Shader::from_wgsl
+        );
+
+        load_internal_asset!(
+            app,
+            CHUNK_PREPASS_HANDLE,
+            "chunk_prepass.wgsl",
+            Shader::from_wgsl
+        );
     }
 }
 
@@ -157,10 +174,10 @@ pub struct ChunkMaterial {
 
 impl Material for ChunkMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_SHADER_HANDLE.into()
     }
     fn fragment_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_SHADER_HANDLE.into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
@@ -179,11 +196,11 @@ impl Material for ChunkMaterial {
     }
 
     fn prepass_vertex_shader() -> ShaderRef {
-        "shaders/chunk_prepass.wgsl".into()
+        CHUNK_PREPASS_HANDLE.into()
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        "shaders/chunk_prepass.wgsl".into()
+        CHUNK_PREPASS_HANDLE.into()
     }
 }
 // copy of chunk material pipeline but with wireframe
@@ -205,10 +222,10 @@ pub struct ChunkMaterialWireframe {
 
 impl Material for ChunkMaterialWireframe {
     fn vertex_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_SHADER_HANDLE.into()
     }
     fn fragment_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_SHADER_HANDLE.into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
@@ -228,10 +245,10 @@ impl Material for ChunkMaterialWireframe {
     }
 
     fn prepass_vertex_shader() -> ShaderRef {
-        "shaders/chunk_prepass.wgsl".into()
+        CHUNK_PREPASS_HANDLE.into()
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        "shaders/chunk_prepass.wgsl".into()
+        CHUNK_PREPASS_HANDLE.into()
     }
 }
