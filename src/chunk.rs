@@ -69,12 +69,12 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     let mut continental_noise = FastNoise::seeded(37);
     continental_noise.set_frequency(0.0002591);
 
-    let continental_noise_downsampler = NoiseDownSampler::new(2, &continental_noise, chunk_origin.xz(), 55.0);
+    let continental_noise_downsampler = NoiseDownSampler::new(2, &continental_noise, chunk_origin.xz(), 55.0, None);
 
     let mut errosion = FastNoise::seeded(549);
     errosion.set_frequency(0.004891);
 
-    let errosion_downsampler = NoiseDownSampler::new(1, &errosion, chunk_origin.xz(), 1.0);
+    let errosion_downsampler = NoiseDownSampler::new(1, &errosion, chunk_origin.xz(), 1.0, None);
 
     let mut fast_noise = FastNoise::new();
     fast_noise.set_frequency(0.0254);
@@ -144,9 +144,9 @@ pub struct NoiseDownSampler {
     edge_length: i32
 }
 impl NoiseDownSampler {
-    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32) -> Self {
+    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32, sampler_size: Option<IVec2>) -> Self {
         let min_point: IVec2 = chunk_origin >> upsampling;
-        let max_point: IVec2 = ((chunk_origin + IVec2::splat(CHUNK_SIZE as i32)) >> upsampling) + 1;
+        let max_point: IVec2 = ((chunk_origin + sampler_size.unwrap_or(IVec2::splat(CHUNK_SIZE as i32))) >> upsampling) + 1;
 
         let edge_length = max_point.x - min_point.x; 
         let mut samples = vec![0.0; (edge_length * edge_length) as usize].into_boxed_slice();
