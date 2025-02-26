@@ -317,37 +317,29 @@ pub fn start_mesh_tasks(
         });
     }
 
-    // We can't use extract_if yet, so we have to do this manually.
-    let tasks_left = (MAX_MESH_TASKS as i32 - mesh_tasks.len() as i32)
-        .min(load_mesh_queue.len() as i32)
-        .max(0) as usize;
-    let mut chunks_to_generate = Vec::with_capacity(tasks_left);
+    let mut i = load_mesh_queue.len();
+    while i > 0 && mesh_tasks.len() < MAX_MESH_TASKS {
+        i -= 1;
 
-    let mut i = load_mesh_queue.len() - 1;
-    while let Some(world_pos) = load_mesh_queue.get_index(i).copied() {
+        let world_pos = load_mesh_queue[i];
+
         // We can only generate a mesh if all neighbors are available.
         let all_neighbors_available = ADJACENT_CHUNK_DIRECTIONS.iter().all(|&dir| {
             world_data.contains_key(&(world_pos + dir))
         });
 
-        if all_neighbors_available {
-            chunks_to_generate.push(world_pos);
-            load_mesh_queue.swap_remove(&world_pos);
-
-            if chunks_to_generate.len() >= tasks_left {
-                break;
-            }
+        if !all_neighbors_available {
+            continue;
         }
-        i -= 1;
-    }
+        load_mesh_queue.swap_remove(&world_pos);
 
-    for world_pos in chunks_to_generate {
         let Some(chunks_refs) = ChunksRefs::try_new(world_data, world_pos) else {
             continue;
         };
+        
         let llod = *lod;
-
         let block_registry = block_registry.0.clone();
+        
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
