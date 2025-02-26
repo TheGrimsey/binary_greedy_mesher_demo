@@ -454,6 +454,7 @@ pub fn join_mesh(
             let mut chunk_entity = commands
                 .spawn((
                     Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
+                    Visibility::Inherited,
                     Name::new(format!("Chunk: {:?}", world_pos)),
                 ));
             chunk_entities.insert(*world_pos, chunk_entity.id());
