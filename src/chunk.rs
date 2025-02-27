@@ -86,7 +86,7 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     for i in 0..CHUNK_SIZE3 {
         let voxel_pos = chunk_origin + index_to_ivec3(i);
 
-        let overhang = /*fast_noise.get_noise3d(voxel_pos.x as f32, voxel_pos.y as f32, voxel_pos.z as f32) * 30.0; */overhang_downsamper.get_noise(voxel_pos);
+        let overhang = overhang_downsamper.get_noise(voxel_pos);
         let noise_2 = surface_noise.get_noise(voxel_pos.xz());
 
         let errosion_noise = errosion_downsampler.get_noise(voxel_pos.xz());
@@ -173,17 +173,17 @@ fn test_interpolate() {
     continental_noise.set_seed(388);
     let continental_noise_downsampler = NoiseDownSampler3D::new(2, &continental_noise, IVec3::ZERO, 55.0, None);
 
-    let n0 = continental_noise_downsampler.get_noise(IVec3::new(0, 0,0));
-    println!("{n0} - {}", continental_noise.get_noise3d(0.0, 0.0, 0.0) * 55.0);
+    //let n0 = continental_noise_downsampler.get_noise(IVec3::new(0, 0,0));
+    //println!("{n0} - {}", continental_noise.get_noise3d(0.0, 0.0, 0.0) * 55.0);
     
-    let n1 = continental_noise_downsampler.get_noise(IVec3::new(1, 0, 0));
-    println!("{n1} - {}", continental_noise.get_noise3d(1.0, 0.0, 0.0) * 55.0);
+    let n1 = continental_noise_downsampler.get_noise(IVec3::new(0, 1, 0));
+    println!("{n1} - {}", continental_noise.get_noise3d(0.0, 1.0, 0.0) * 55.0);
     
-    let n2 = continental_noise_downsampler.get_noise(IVec3::new(2, 0, 0));
-    println!("{n2} - {}", continental_noise.get_noise3d(2.0, 0.0, 0.0) * 55.0);
+    //let n2 = continental_noise_downsampler.get_noise(IVec3::new(2, 0, 0));
+    //println!("{n2} - {}", continental_noise.get_noise3d(2.0, 0.0, 0.0) * 55.0);
     
-    let n3 = continental_noise_downsampler.get_noise(IVec3::new(31, 31, 31));
-    println!("{n3} - {} - S{}", continental_noise.get_noise3d(31.0, 31.0, 31.0) * 55.0, continental_noise_downsampler.samples.last().unwrap());
+    //let n3 = continental_noise_downsampler.get_noise(IVec3::new(31, 31, 31));
+    //println!("{n3} - {} - S{}", continental_noise.get_noise3d(31.0, 31.0, 31.0) * 55.0, continental_noise_downsampler.samples.last().unwrap());
     
 
 }
@@ -297,7 +297,6 @@ impl NoiseDownSampler3D {
 
         let index = local_sample_point.x + local_sample_point.z * self.edge_length.x + local_sample_point.y * self.edge_length.x * self.edge_length.z;
         let layer_offset = self.edge_length.x * self.edge_length.z;
-        println!("Index: {} - Layer offset: {}, Size: {}", index, layer_offset, self.edge_length);
         
         let sample_value_000 = self.samples[index as usize];
         let sample_value_100 = self.samples[(index + 1) as usize];
@@ -313,11 +312,10 @@ impl NoiseDownSampler3D {
         let world_sample_point = world_sample_point << self.upsampling;
         let sample_point = (world_pos - world_sample_point).as_vec3() / (1 << self.upsampling) as f32;
         
-        println!("{sample_value_000} - {sample_value_100} ({sample_point}), exp: {}", (sample_value_100 - sample_value_000) * sample_point.x + sample_value_000);
         trilinear_interpolation(
             sample_point.x,
-            sample_point.y,
             sample_point.z,
+            sample_point.y,
             sample_value_000,
             sample_value_100,
             sample_value_010,
