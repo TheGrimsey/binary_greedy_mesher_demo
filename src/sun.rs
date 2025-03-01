@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
 pub const DAY_TIME_SEC: f32 = 60.0;
 pub const NIGHT_TIME_SEC: f32 = 1.0;
@@ -38,7 +37,6 @@ impl Plugin for SunPlugin {
             TimerMode::Repeating,
         )));
         app.add_systems(Update, daylight_cycle);
-        app.add_plugins(ResourceInspectorPlugin::<SunSettings>::default());
     }
 }
 

@@ -7,16 +7,16 @@ use bevy::{
     }
 };
 
-use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin, ResourceInspectorPlugin};
 use bevy_screen_diagnostics::{
     ScreenDiagnosticsPlugin, ScreenEntityDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin,
 };
 
 use new_voxel_testing::{
-    chunk::{self, ChunkGenerator}, rendering::{
+    chunk::{self, ChunkGenerator}, diagnostics::VoxelDiagnosticsPlugin, rendering::{
         ChunkMaterial,
         RenderingPlugin,
-    }, scanner::{DataScanner, MeshScanner, Scanner}, sun::{Sun, SunPlugin}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
+    }, scanner::{DataScanner, MeshScanner, Scanner}, sun::{Sun, SunPlugin, SunSettings}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
 
 use bevy_flycam::prelude::*;
@@ -45,6 +45,7 @@ fn main() {
             }),))
         .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(AssetInspectorPlugin::<ChunkMaterial>::default())
+        .add_plugins(ResourceInspectorPlugin::<SunSettings>::default())
         .add_plugins(VoxelEnginePlugin)
         .add_plugins(SunPlugin)
         .add_systems(Startup, setup)
@@ -53,6 +54,7 @@ fn main() {
         .add_plugins(RenderingPlugin)
         .add_plugins((
             ScreenDiagnosticsPlugin::default(),
+            VoxelDiagnosticsPlugin,
             ScreenFrameDiagnosticsPlugin,
             ScreenEntityDiagnosticsPlugin,
         ))

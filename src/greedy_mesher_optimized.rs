@@ -177,7 +177,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: Arc<
                     }
 
                     let current_voxel = chunks_refs.get_block_no_neighbour(voxel_pos);
-                    // let current_voxel = chunks_refs.get_block(voxel_pos);
+
                     // we can only greedy mesh same block types + same ambient occlusion
 
                     let block_type = current_voxel.block_type.0 as u32 & ignore_block_type_mask;
