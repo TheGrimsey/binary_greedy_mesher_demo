@@ -8,7 +8,7 @@ use bevy::{
 use indexmap::IndexSet;
 
 use crate::{
-    chunk::{ChunkData, ChunkGenerator}, constants::CHUNK_SIZE3, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, scanner::{scan, ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, Scanner, ScannerPlugin}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockId}
+    chunk::{ChunkData, ChunkGenerator}, constants::{CHUNK_SIZE, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, scanner::{scan, ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, Scanner, ScannerPlugin}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockId}
 };
 
 pub struct VoxelEnginePlugin;
@@ -167,9 +167,9 @@ pub fn start_modifications(
         chunk_modifications,
         ..
     } = voxel_engine.as_mut();
-    for (pos, mods) in chunk_modifications.drain() {
+    for (chunk_pos, mods) in chunk_modifications.drain() {
         // say i want to load mesh now :)
-        let Some(chunk_data) = world_data.get_mut(&pos) else {
+        let Some(chunk_data) = world_data.get_mut(&chunk_pos) else {
             continue;
         };
         let new_chunk_data = Arc::make_mut(chunk_data);
@@ -181,10 +181,29 @@ pub fn start_modifications(
             }
             new_chunk_data.voxels[i].block_type = block_type;
             if let Some(edge_chunk) = get_edging_chunk(local_pos) {
-                updated_and_adjecant_chunks_set.insert(pos + edge_chunk);
+                updated_and_adjecant_chunks_set.insert(chunk_pos + edge_chunk);
+            }
+
+            // Add pos chunks to the modified list.
+            if local_pos.x == 0 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(1, 0, 0));
+            } else if local_pos.x == CHUNK_SIZE as i32 - 1 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(1, 0, 0));
+            }
+
+            if local_pos.y == 0 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(0, 1, 0));
+            } else if local_pos.y == CHUNK_SIZE as i32 - 1 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(0, 1, 0));
+            }
+        
+            if local_pos.z == 0 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(0, 0, 1));
+            } else if local_pos.z == CHUNK_SIZE as i32 - 1 {
+                updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(0, 0, 1));
             }
         }
-        updated_and_adjecant_chunks_set.insert(pos);
+        updated_and_adjecant_chunks_set.insert(chunk_pos);
     }
 
     events.send_batch(updated_and_adjecant_chunks_set.iter().cloned().map(ChunkModified));

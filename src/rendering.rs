@@ -305,6 +305,7 @@ pub fn start_mesh_tasks(
     // We do this so we can pop from the end of the list.
     if !chunk_gained_mesh_relevance.is_empty() || !chunk_modified.is_empty() {
         mesh_pipeline.load_mesh_queue.extend(chunk_gained_mesh_relevance.read().map(|e| e.chunk));
+
         mesh_pipeline.load_mesh_queue.extend(chunk_modified.read().map(|e| e.0).filter(|chunk| global_mesh_scanner_chunks.chunks.contains(chunk)));
 
         // TODO: With many chunks in queue, this is SLOW.
