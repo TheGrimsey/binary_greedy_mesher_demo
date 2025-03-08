@@ -64,7 +64,27 @@ fn main() {
                                   // speed: 32.0 * 12.0,   // default: 12.0
         })
         .add_systems(Update, modify_current_terrain)
+        .add_systems(PreStartup, load_block_registry)
         .run();
+}
+
+fn load_block_registry(
+    mut commands: Commands,
+) {
+    // TODO: Actually load a block registry from assets. For now, just add some dummy blocks.
+    let mut block_registry = BlockRegistry::default();
+    let _ = block_registry.add_block(
+        BlockStringIdentifier(Box::from("air")),
+        &Block { visibility: BlockVisibilty::Invisible, collision: false, ..default() },
+    );
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.0, 1.0, 0.0), ..default() });
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.3, 0.4, 0.0), ..default() });
+
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("glass")), &Block { visibility: BlockVisibilty::Transparent, color: Color::srgba(0.3, 0.3, 0.3, 0.5), ..default() });
+
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgba(0.1, 0.1, 0.1, 1.0), ..default() });
+
+    commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 }
 
 pub fn modify_current_terrain(

@@ -8,7 +8,7 @@ use bevy::{
 use indexmap::IndexSet;
 
 use crate::{
-    chunk::{ChunkData, ChunkGenerator}, constants::{CHUNK_SIZE, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, scanner::{scan, ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, Scanner, ScannerPlugin}, utils::{get_edging_chunk, vec3_to_index}, voxel::{load_block_registry, BlockId}
+    chunk::{ChunkData, ChunkGenerator}, constants::{CHUNK_SIZE, CHUNK_SIZE3}, events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded}, lod::Lod, scanner::{scan, ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin, DataScanner, MeshScanner, Scanner, ScannerPlugin}, utils::{get_edging_chunk, vec3_to_index}, voxel::BlockId
 };
 
 pub struct VoxelEnginePlugin;
@@ -32,7 +32,6 @@ impl Plugin for VoxelEnginePlugin {
             Update,
             (join_data, (unload_data, start_data_tasks).chain().after(scan::<DataScanner>)).chain(),
         );
-        app.add_systems(PreStartup, load_block_registry);
     }
 }
 

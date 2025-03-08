@@ -49,7 +49,7 @@ impl BlockRegistry {
         self.block_flags[block_id.0 as usize].contains(flag)
     }
 
-    fn add_block(
+    pub fn add_block(
         &mut self,
         identifier: BlockStringIdentifier,
         block: &Block,
@@ -105,23 +105,4 @@ impl Default for Block {
             emissive_color: Color::NONE,
         }
     }
-}
-
-pub(super) fn load_block_registry(
-    mut commands: Commands,
-) {
-    // TODO: Actually load a block registry from assets. For now, just add some dummy blocks.
-    let mut block_registry = BlockRegistry::default();
-    let _ = block_registry.add_block(
-        BlockStringIdentifier(Box::from("air")),
-        &Block { visibility: BlockVisibilty::Invisible, collision: false, ..default() },
-    );
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.0, 1.0, 0.0), ..default() });
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgb(0.3, 0.4, 0.0), ..default() });
-
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("glass")), &Block { visibility: BlockVisibilty::Transparent, color: Color::srgba(0.3, 0.3, 0.3, 0.5), ..default() });
-
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgba(0.1, 0.1, 0.1, 1.0), ..default() });
-
-    commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 }
