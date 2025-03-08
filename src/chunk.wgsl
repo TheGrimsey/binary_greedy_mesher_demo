@@ -91,16 +91,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
 
-    let s = 0.05;
-    var noise = simplexNoise2(vec2<f32>(world_position.x*s, world_position.z*s));
-    var k = simplexNoise2(vec2<f32>(world_position.x*s, world_position.z*s));
-
-    let high = vec3<f32>(9.00, 6.0, 0.0);
-    let low = vec3<f32>(0.8, 1.0, 0.40);
-    
-    noise = (out.world_position.y) / 30.0;
-
-    let fun = (low * noise) + (high * (1.0-noise));
     out.blend_color = block_color[block_index];
     out.blend_emissive = block_emissive[block_index];
     out.instance_index = vertex.instance_index;

@@ -2,8 +2,7 @@ use std::{f32::consts::PI, sync::Arc};
 
 use bevy::{
     color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
-        settings::{RenderCreation, WgpuFeatures, WgpuSettings},
-        RenderPlugin,
+        camera::Exposure, settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
     }
 };
 
@@ -82,7 +81,7 @@ fn load_block_registry(
 
     let _ = block_registry.add_block(BlockStringIdentifier(Box::from("glass")), &Block { visibility: BlockVisibilty::Transparent, color: Color::srgba(0.3, 0.3, 0.3, 0.5), ..default() });
 
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgba(0.1, 0.1, 0.1, 1.0), ..default() });
+    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), &Block { visibility: BlockVisibilty::Solid, color: Color::srgba(1.0, 1.0, 1.0, 1.0), ..default() });
 
     commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 }
