@@ -64,10 +64,10 @@ fn initialize_global_chunk_materials(
     mut commands: Commands,
     block_registry: Res<BlockRegistryResource>,
 ) {
-    let colors = block_registry.0.block_color.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
+    let colors = block_registry.0.block_color.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
     let colors = buffers.add(ShaderStorageBuffer::from(colors));
     
-    let emissive = block_registry.0.block_emissive.iter().map(|color| color.to_srgba().to_f32_array()).collect::<Vec<_>>();
+    let emissive = block_registry.0.block_emissive.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
     let emissive = buffers.add(ShaderStorageBuffer::from(emissive));
 
     // TODO: Add transparent material.
