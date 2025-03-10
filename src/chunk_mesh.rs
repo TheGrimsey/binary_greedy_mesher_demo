@@ -1,6 +1,11 @@
-use bevy::{asset::RenderAssetUsages, math::{IVec3, Vec3}, render::{mesh::{Indices, Mesh, PrimitiveTopology}, primitives::Aabb}};
+use bevy::{asset::RenderAssetUsages, math::{IVec3, Vec3}, render::{mesh::{Indices, Mesh, MeshVertexAttribute, PrimitiveTopology}, primitives::Aabb, render_resource::VertexFormat}};
 
-use crate::{rendering::ATTRIBUTE_VOXEL, utils::get_pos_from_vertex_u32};
+use crate::utils::get_pos_from_vertex_u32;
+
+// A "high" random id should be used for custom attributes to ensure consistent sorting and avoid collisions with other attributes.
+// See the MeshVertexAttribute docs for more info.
+pub const ATTRIBUTE_VOXEL: MeshVertexAttribute =
+    MeshVertexAttribute::new("Voxel", 988540919, VertexFormat::Uint32);
 
 /// gpu ready mesh payload
 #[derive(Default)]

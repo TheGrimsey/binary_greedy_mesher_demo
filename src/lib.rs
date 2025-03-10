@@ -9,7 +9,6 @@ pub mod quad;
 #[cfg(feature = "rendering")]
 pub mod rendering;
 pub mod scanner;
-pub mod sun;
 pub mod utils;
 pub mod voxel;
 pub mod voxel_engine;

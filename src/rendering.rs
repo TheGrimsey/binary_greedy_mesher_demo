@@ -9,7 +9,7 @@ use bevy::{
 };
 use indexmap::IndexSet;
 
-use crate::{chunk_mesh::ChunkMesh, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
+use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
 
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
@@ -150,11 +150,6 @@ pub struct GlobalChunkMaterial {
 }
 #[derive(Resource, Reflect)]
 pub struct GlobalChunkWireframeMaterial(pub Handle<ChunkMaterialWireframe>);
-
-// A "high" random id should be used for custom attributes to ensure consistent sorting and avoid collisions with other attributes.
-// See the MeshVertexAttribute docs for more info.
-pub const ATTRIBUTE_VOXEL: MeshVertexAttribute =
-    MeshVertexAttribute::new("Voxel", 988540919, VertexFormat::Uint32);
 
 #[derive(Component)]
 pub enum ChunkEntityType {

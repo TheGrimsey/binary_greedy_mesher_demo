@@ -15,7 +15,7 @@ use new_voxel_testing::{
     chunk::{self, ChunkGenerator}, diagnostics::VoxelDiagnosticsPlugin, rendering::{
         ChunkMaterial,
         RenderingPlugin,
-    }, scanner::{DataScanner, MeshScanner, Scanner}, sun::{Sun, SunPlugin, SunSettings}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
+    }, scanner::{DataScanner, MeshScanner, Scanner}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
 
 use bevy_flycam::prelude::*;
@@ -44,9 +44,7 @@ fn main() {
             }),))
         .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(AssetInspectorPlugin::<ChunkMaterial>::default())
-        .add_plugins(ResourceInspectorPlugin::<SunSettings>::default())
         .add_plugins(VoxelEnginePlugin)
-        .add_plugins(SunPlugin)
         .add_systems(Startup, setup)
         // camera plugin
         .add_plugins(NoCameraPlayerPlugin)
@@ -117,7 +115,6 @@ pub fn setup(
 ) {
     commands.spawn((
         Name::new("directional light light"),
-        Sun,
         DirectionalLight {
             illuminance: 10000.0,
             shadows_enabled: true,
