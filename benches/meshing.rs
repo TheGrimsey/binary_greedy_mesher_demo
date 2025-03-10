@@ -10,20 +10,20 @@ use new_voxel_testing::{
     voxel::{BlockData, BlockFlags, BlockId, BlockRegistry},
 };
 
-fn binary_mesh_optimized(chunks_refs: ChunksRefs) {
+/*fn binary_mesh_optimized(chunks_refs: ChunksRefs) {
     let block_registry = Arc::new(BlockRegistry {
         block_flags: vec![BlockFlags::empty(), BlockFlags::SOLID, BlockFlags::SOLID],
         ..default()
     });
 
     let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32, block_registry, BlockFlags::SOLID, true, false);
-}
+}*/
 
 // helper for incrementing and constructing chunksrefs
-fn make_chunks_refs(s: &mut u64) -> ChunksRefs {
+/*fn make_chunks_refs(s: &mut u64) -> ChunksRefs {
     *s += 1;
     ChunksRefs::make_dummy_chunk_refs(*s)
-}
+}*/
 
 fn make_empty() -> ChunksRefs {
     let mut chunks = vec![];
@@ -78,10 +78,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     b.iter_with_setup(|| [1u32; 32], |i| slicer(i))
     // });
 
-    c.bench_function("GREEDY meshing OPTIMIZED: 1 chunk [ao]", |b| {
+    /*c.bench_function("GREEDY meshing OPTIMIZED: 1 chunk [ao]", |b| {
         let mut s = 0;
         b.iter_with_setup(|| make_chunks_refs(&mut s), binary_mesh_optimized)
-    });
+    });*/
     // c.bench_function("GREEDY meshing OPTIMIZED: 1 chunk [ao] FILLED", |b| {
     //     b.iter_with_setup(|| make_filled(), |i| binary_mesh_optimized(i))
     // });

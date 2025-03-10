@@ -4,11 +4,11 @@ use bevy::{
     math::{ivec3, IVec3},
     utils::HashMap,
 };
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
+/*use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;*/
 
 use crate::{
-    chunk::{generate, ChunkData},
+    chunk::ChunkData,
     quad::Direction,
     utils::{index_to_ivec3_bounds, vec3_to_index},
     voxel::BlockData,
@@ -57,7 +57,7 @@ impl ChunksRefs {
         true
     }
 
-    /// only use for testing purposes
+    /*/// only use for testing purposes
     pub fn make_dummy_chunk_refs(seed: u64) -> ChunksRefs {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut chunks = vec![];
@@ -71,7 +71,7 @@ impl ChunksRefs {
             chunks.push(Arc::new(generate(pos + offset)));
         }
         ChunksRefs { chunks }
-    }
+    }*/
 
     /// helper function to get block data that may exceed the bounds of the middle chunk
     /// input position is local pos to middle chunk

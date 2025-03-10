@@ -41,7 +41,7 @@ fn iter_vec(data: Vec<BlockData>) {
     }
 }
 
-fn criterion_benchmark(c: &mut Criterion) {
+/*fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("iter chunk_refs ", |b| {
         b.iter_with_setup(
             || ChunksRefs::make_dummy_chunk_refs(0),
@@ -71,4 +71,4 @@ fn criterion_benchmark(c: &mut Criterion) {
 }
 
 criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);
+criterion_main!(benches);*/

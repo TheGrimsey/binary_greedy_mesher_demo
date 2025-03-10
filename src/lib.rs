@@ -6,6 +6,7 @@ pub mod face_direction;
 pub mod greedy_mesher_optimized;
 pub mod lod;
 pub mod quad;
+#[cfg(feature = "rendering")]
 pub mod rendering;
 pub mod scanner;
 pub mod sun;

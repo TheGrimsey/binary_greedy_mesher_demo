@@ -6,24 +6,26 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["rendering"]
 diagnostics = ["bevy_screen_diagnostics"]
+rendering = ["bevy/bevy_pbr", "bevy/bevy_asset"]
 
 [dependencies]
-bevy = "0.15"
+bevy = { version = "0.15", default-features = false, features = ["multi_threaded"]}
 bitflags = "2.8"
 bracket-noise = "0.8.7"
 indexmap = "2.7.1"
-rand = "0.9"
-rand_chacha = "0.9"
-tinyvec = "1.6.0"
 
 bevy_screen_diagnostics = { git = "https://github.com/mlupo19/bevy_screen_diagnostics.git", branch = "personal/0.15", optional = true }
 
 [dev-dependencies]
+bevy = { version = "0.15" }
 criterion = {version="0.5.1", features = ["html_reports"]}
 bevy_atmosphere = "0.12"
 bevy_flycam = "0.15.0"
 bevy-inspector-egui = "0.29"
+rand = "0.9"
+rand_chacha = "0.9"
 
 # [[bench]]
 # name = "chunk"

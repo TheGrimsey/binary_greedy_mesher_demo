@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy::{color::Color, ecs::system::{Commands, Resource}, utils::{default, HashMap}};
+use bevy::{color::Color, ecs::system::Resource, utils::HashMap};
 
 /// The on disk identifier for a block.
 /// Consistent between adding & removing block types.

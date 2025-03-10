@@ -2,7 +2,7 @@ use std::{f32::consts::PI, sync::Arc};
 
 use bevy::{
     color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
-        camera::Exposure, settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
+        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
     }
 };
 
