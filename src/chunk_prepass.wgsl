@@ -5,6 +5,7 @@
     skinning,
     morph,
     mesh_view_bindings::{view, previous_view_proj},
+    view_transformations::position_world_to_clip,
 }
 
 #ifdef DEFERRED_PREPASS
@@ -39,7 +40,8 @@ struct Vertex {
 struct MyVertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
-    // @location(1) world_position: vec4<f32>,
+    @location(1) world_position: vec4<f32>,
+    @location(2) clip_position_unclamped: vec4<f32>,
     // @location(4) blend_color: vec3<f32>,
     // @location(5) ambient: f32,
 };
@@ -74,8 +76,14 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
     // See https://github.com/gfx-rs/naga/issues/2416
     var model = mesh_functions::get_world_from_local(vertex.instance_index);
 
-    let world_position = model* local_position;
-    out.position = mesh_functions::mesh_position_local_to_clip(model, local_position);
+    let world_position = mesh_functions::mesh_position_local_to_world(model, local_position);
+    out.position = position_world_to_clip(world_position.xyz);
+    out.world_position = world_position;
+
+#ifdef DEPTH_CLAMP_ORTHO
+    out.clip_position_unclamped = out.position;
+    out.position.z = min(out.position.z, 1.0);
+#endif // DEPTH_CLAMP_ORTHO
 
     return out;
 }
@@ -85,7 +93,10 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
 fn fragment(in: MyVertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    out.frag_depth = in.position.z;
+#ifdef DEPTH_CLAMP_ORTHO
+    out.frag_depth = in.clip_position_unclamped.z;
+#endif // DEPTH_CLAMP_ORTHO
+
 #ifdef NORMAL_PREPASS
     out.normal = vec4(in.world_normal * 0.5 + vec3(0.5), 1.0);
 #endif

@@ -1,9 +1,9 @@
 use bevy::{
     asset::load_internal_asset, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
-        mesh::{MeshVertexAttribute, MeshVertexBufferLayoutRef},
+        mesh::MeshVertexBufferLayoutRef,
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
-            SpecializedMeshPipelineError, VertexFormat,
+            SpecializedMeshPipelineError,
         }, storage::ShaderStorageBuffer,
     }, tasks::{block_on, poll_once, AsyncComputeTaskPool, Task}, utils::HashMap
 };

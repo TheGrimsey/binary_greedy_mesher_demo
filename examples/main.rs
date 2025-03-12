@@ -2,7 +2,7 @@ use std::{f32::consts::PI, sync::Arc};
 
 use bevy::{
     color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
-        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
+        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, view::NoFrustumCulling, RenderPlugin
     }
 };
 
@@ -120,12 +120,7 @@ pub fn setup(
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_rotation(Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            PI / 2.,
-            -PI / 4.,
-        )),
+        Transform::from_translation(Vec3::new(-10.0, 10.0, -10.0)).looking_at(Vec3::ZERO, Vec3::Y),
         CascadeShadowConfigBuilder {
             num_cascades: 3,
             maximum_distance: 32.0 * 20.0,
@@ -146,9 +141,9 @@ pub fn setup(
             Camera3d::default(),
             Transform::from_xyz(0.0, 2.0, 0.5),
             Msaa::Off,
-            OrderIndependentTransparencySettings::default()
-        ))
-        .insert(FlyCam);
+            OrderIndependentTransparencySettings::default(),
+            FlyCam
+        ));
 
     // circular base in origin
     commands.spawn((

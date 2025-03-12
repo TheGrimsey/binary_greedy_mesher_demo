@@ -102,11 +102,7 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
                 _ => BlockId(2), // Grass
             },
             false => {
-                if voxel_pos.y < 0 {
-                    BlockId(3) // Glass pretending to be water :)
-                } else {
-                    BlockId(0)
-                }
+                BlockId(0)
             },
         };
         voxels.push(BlockData { block_type });
