@@ -11,11 +11,12 @@ use bevy_screen_diagnostics::{
     ScreenDiagnosticsPlugin, ScreenEntityDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin,
 };
 
+use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
-    chunk::{self, ChunkGenerator}, diagnostics::VoxelDiagnosticsPlugin, rendering::{
+    chunk::{self, ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D}, constants::CHUNK_SIZE3, diagnostics::VoxelDiagnosticsPlugin, rendering::{
         ChunkMaterial,
         RenderingPlugin,
-    }, scanner::{DataScanner, MeshScanner, Scanner}, utils::world_to_chunk, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
+    }, scanner::{DataScanner, MeshScanner, Scanner}, utils::{index_to_ivec3, world_to_chunk}, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
 
 use bevy_flycam::prelude::*;
@@ -153,6 +154,79 @@ pub fn setup(
     ));
 
     commands.insert_resource(ChunkGenerator {
-        generate: Arc::new(chunk::generate)
+        generate: Arc::new(generate)
     });
+}
+
+
+/// shape our voxel data based on the chunk_pos
+pub fn generate(chunk_pos: IVec3) -> ChunkData {
+
+    // hardcoded extremity check
+    let chunk_height_limit = 3;
+
+    if chunk_pos.y > chunk_height_limit {
+        return ChunkData {
+            voxels: vec![BlockData {
+                block_type: BlockId(0),
+            }],
+        };
+    }
+    // hardcoded extremity check
+    if chunk_pos.y < -chunk_height_limit {
+        return ChunkData {
+            voxels: vec![BlockData {
+                block_type: BlockId(2),
+            }],
+        };
+    }
+
+    let _span = info_span!("Generating chunk data").entered();
+
+    let chunk_origin = chunk_pos * 32;
+    let mut voxels = Vec::with_capacity(CHUNK_SIZE3);
+
+    let mut continental_noise = FastNoise::seeded(37);
+    continental_noise.set_frequency(0.0002591);
+
+    let continental_noise_downsampler = NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0, None);
+
+    let mut errosion = FastNoise::seeded(549);
+    errosion.set_frequency(0.004891);
+
+    let errosion_downsampler = NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0, None);
+
+    let mut fast_noise = FastNoise::new();
+    fast_noise.set_frequency(0.002591);
+    let surface_noise = NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0, None);
+    
+    fast_noise.set_frequency(0.0254);
+    let overhang_downsamper = NoiseDownSampler3D::new(1, &fast_noise, chunk_origin, 55.0, Some(IVec3::new(0, 12, 0)));
+
+    for i in 0..CHUNK_SIZE3 {
+        let voxel_pos = chunk_origin + index_to_ivec3(i);
+
+        let overhang = overhang_downsamper.get_noise(voxel_pos);
+        let noise_2 = surface_noise.get_noise(voxel_pos.xz());
+
+        let errosion_noise = errosion_downsampler.get_noise(voxel_pos.xz());
+        let continental_noise = continental_noise_downsampler.get_noise(voxel_pos.xz());
+
+        let surface_height = continental_noise + (noise_2 + overhang) * (1.0 - errosion_noise);
+        let solid = surface_height > voxel_pos.y as f32;
+
+        let block_type = match solid {
+            true => match surface_height - voxel_pos.y as f32 { // Distance from surface
+                y if y > 3.0 => BlockId(4), // Stone
+                y if y > 1.0 => BlockId(1), // Dirt
+                _ => BlockId(2), // Grass
+            },
+            false => {
+                BlockId(0)
+            },
+        };
+        voxels.push(BlockData { block_type });
+    }
+
+    ChunkData { voxels }
 }

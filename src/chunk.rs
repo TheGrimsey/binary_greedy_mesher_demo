@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bracket_noise::prelude::*;
 
 use crate::{
-    constants::{CHUNK_SIZE, CHUNK_SIZE3}, utils::index_to_ivec3, voxel::{BlockData, BlockId}
+    constants::CHUNK_SIZE, voxel::BlockData
 };
 
 #[derive(Resource)]
@@ -38,79 +38,6 @@ impl ChunkData {
     }
 }
 
-
-/// shape our voxel data based on the chunk_pos
-pub fn generate(chunk_pos: IVec3) -> ChunkData {
-
-    // hardcoded extremity check
-    let chunk_height_limit = 3;
-
-    if chunk_pos.y > chunk_height_limit {
-        return ChunkData {
-            voxels: vec![BlockData {
-                block_type: BlockId(0),
-            }],
-        };
-    }
-    // hardcoded extremity check
-    if chunk_pos.y < -chunk_height_limit {
-        return ChunkData {
-            voxels: vec![BlockData {
-                block_type: BlockId(2),
-            }],
-        };
-    }
-
-    let _span = info_span!("Generating chunk data").entered();
-
-    let chunk_origin = chunk_pos * 32;
-    let mut voxels = Vec::with_capacity(CHUNK_SIZE3);
-
-    let mut continental_noise = FastNoise::seeded(37);
-    continental_noise.set_frequency(0.0002591);
-
-    let continental_noise_downsampler = NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0);
-
-    let mut errosion = FastNoise::seeded(549);
-    errosion.set_frequency(0.004891);
-
-    let errosion_downsampler = NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0);
-
-    let mut fast_noise = FastNoise::new();
-    fast_noise.set_frequency(0.002591);
-    let surface_noise = NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0);
-    
-    fast_noise.set_frequency(0.0254);
-    let overhang_downsamper = NoiseDownSampler3D::new(1, &fast_noise, chunk_origin, 55.0, Some(IVec3::new(0, 12, 0)));
-
-    for i in 0..CHUNK_SIZE3 {
-        let voxel_pos = chunk_origin + index_to_ivec3(i);
-
-        let overhang = overhang_downsamper.get_noise(voxel_pos);
-        let noise_2 = surface_noise.get_noise(voxel_pos.xz());
-
-        let errosion_noise = errosion_downsampler.get_noise(voxel_pos.xz());
-        let continental_noise = continental_noise_downsampler.get_noise(voxel_pos.xz());
-
-        let surface_height = continental_noise + (noise_2 + overhang) * (1.0 - errosion_noise);
-        let solid = surface_height > voxel_pos.y as f32;
-
-        let block_type = match solid {
-            true => match surface_height - voxel_pos.y as f32 { // Distance from surface
-                y if y > 3.0 => BlockId(4), // Stone
-                y if y > 1.0 => BlockId(1), // Dirt
-                _ => BlockId(2), // Grass
-            },
-            false => {
-                BlockId(0)
-            },
-        };
-        voxels.push(BlockData { block_type });
-    }
-
-    ChunkData { voxels }
-}
-
 fn bilinear_interpolation(
     alpha: f32,
     beta: f32,
@@ -141,12 +68,6 @@ fn trilinear_interpolation(
     let c1 = (1.0 - beta) * c01 + beta * c11;
 
     (1.0 - gamma) * c0 + gamma * c1
-}
-
-
-#[test]
-fn test_generate() {
-    let _ = generate(IVec3::new(0, 0, 0));
 }
 
 #[test]
@@ -192,9 +113,11 @@ pub struct NoiseDownSampler2D {
     edge_length: i32
 }
 impl NoiseDownSampler2D {
-    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32) -> Self {
-        let min_point: IVec2 = chunk_origin >> upsampling;
-        let max_point: IVec2 = ((chunk_origin + IVec2::splat(CHUNK_SIZE as i32)) >> upsampling) + 1;
+    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32, buffer: Option<i16>) -> Self {
+        let buffer = buffer.unwrap_or(0) as i32;
+
+        let min_point: IVec2 = (chunk_origin >> upsampling) - buffer;
+        let max_point: IVec2 = ((chunk_origin + IVec2::splat(CHUNK_SIZE as i32)) >> upsampling) + 1 + buffer;
 
         let edge_length = max_point.x - min_point.x; 
         let mut samples = vec![0.0; (edge_length * edge_length) as usize].into_boxed_slice();
