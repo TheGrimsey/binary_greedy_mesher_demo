@@ -189,16 +189,16 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     let mut continental_noise = FastNoise::seeded(37);
     continental_noise.set_frequency(0.0002591);
 
-    let continental_noise_downsampler = NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0, None);
+    let continental_noise_downsampler = NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0, None, false);
 
     let mut errosion = FastNoise::seeded(549);
     errosion.set_frequency(0.004891);
 
-    let errosion_downsampler = NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0, None);
+    let errosion_downsampler = NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0, None, false);
 
     let mut fast_noise = FastNoise::new();
     fast_noise.set_frequency(0.002591);
-    let surface_noise = NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0, None);
+    let surface_noise = NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0, None, false);
     
     fast_noise.set_frequency(0.0254);
     let overhang_downsamper = NoiseDownSampler3D::new(1, &fast_noise, chunk_origin, 55.0, Some(IVec3::new(0, 12, 0)));

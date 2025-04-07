@@ -113,7 +113,7 @@ pub struct NoiseDownSampler2D {
     edge_length: i32
 }
 impl NoiseDownSampler2D {
-    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32, buffer: Option<i16>) -> Self {
+    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32, buffer: Option<i16>, unitised: bool) -> Self {
         let buffer = buffer.unwrap_or(0) as i32;
 
         let min_point: IVec2 = (chunk_origin >> upsampling) - buffer;
@@ -130,10 +130,16 @@ impl NoiseDownSampler2D {
                 let index = sample_point - min_point;
                 let index = index.x + index.y * edge_length;
 
-                let sample_value = noise.get_noise(
+                let noise_value = noise.get_noise(
                     world_point.x as f32,
                     world_point.y as f32,
                 );
+
+                let sample_value = if unitised {
+                    noise_value * 0.5 + 0.5
+                } else {
+                    noise_value
+                };
 
                 samples[index as usize] = sample_value * scale;
             }
