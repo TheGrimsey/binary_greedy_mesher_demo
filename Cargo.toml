@@ -35,6 +35,11 @@ rand_chacha = "0.9"
 name = "meshing"
 harness = false
 
+[[bench]]
+name = "util_funcs"
+harness = false
+
+
 # [[bench]]
 # name = "chunks_refs"
 # harness = false

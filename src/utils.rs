@@ -4,10 +4,10 @@ pub const CHUNK_POWER: i32 = 5;
 
 #[inline]
 pub fn index_to_ivec3(i: usize) -> IVec3 {
-    let x = i % 32;
-    let y = (i / 32) % 32;
-    let z = i / (32 * 32);
-    IVec3::new(x as i32, y as i32, z as i32)
+    let x = (i & 31) as i32;
+    let y = ((i >> 5) & 31) as i32;
+    let z = (i >> 10) as i32;
+    IVec3::new(x, y, z)
 }
 
 #[inline]
