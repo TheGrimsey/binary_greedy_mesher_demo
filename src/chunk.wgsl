@@ -30,51 +30,91 @@ struct ChunkMaterial {
 };
 
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
-@group(2) @binding(1) var<storage, read> block_color: array<vec4<f32>>;
-@group(2) @binding(2) var<storage, read> block_emissive: array<vec4<f32>>;
+@group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
+@group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
-    @location(0) vert_data: u32,
+    @builtin(vertex_index) index: u32
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
-    @location(2) blend_color: vec4<f32>,
-    @location(3) blend_emissive: vec4<f32>,
-    @location(4) ambient: f32,
-    @location(5) instance_index: u32,
+    @location(2) uv: vec2<f32>,
+    @location(3) ambient: f32,
+    @location(4) instance_index: u32,
+    @location(5) texture_id: u32,
 };
 
-var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
+struct Face {
+    /// Block Position: X,Y,Z - 5 bits each (0-31)
+    /// AO - 2 bits * 8 (one for each corner of the voxel)
+    /// Final 1 bit unused.
+    pos_ao: u32,
 
-// indexing an array has to be in some memory
-// by declaring this as a var instead it works
-var<private> normals: array<vec3<f32>,6> = array<vec3<f32>,6> (
-	vec3<f32>(-1.0, 0.0, 0.0), // Left
-	vec3<f32>(1.0, 0.0, 0.0), // Right
-	vec3<f32>(0.0, -1.0, 0.0), // Down
-	vec3<f32>(0.0, 1.0, 0.0), // Up
-	vec3<f32>(0.0, 0.0, -1.0), // Forward
-	vec3<f32>(0.0, 0.0, 1.0) // Back
-);
+    /// Index into the model buffer
+    model_id: u32,
+    texture_id: u32,
+}
+
+struct ModelQuad {
+    positions: array<vec3<f32>, 4>,
+    uv: array<vec2<f32>, 4>,
+    normal: vec3<f32>,
+
+    // AO corner (of the 8 corners) for each vertex.
+    // 3 bits per vertex, 4 vertices.
+    // 12 bits total, packed into a u32.
+    ao: u32
+}
+
+var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
 }
 
+/*
+*   Vertex Buffer:
+    - X,Y,Z - 6 bits each
+    - AO - 3 bits
+
+*   Face Buffer:
+*   -  
+*   Model Buffer?
+*   - Face Normals
+*   - Face Colors
+*/
+
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let x = f32(vertex.vert_data & x_positive_bits(6u));
-    let y = f32(vertex.vert_data >> 6u & x_positive_bits(6u));
-    let z = f32(vertex.vert_data >> 12u & x_positive_bits(6u));
-    let ao = vertex.vert_data >> 18u & x_positive_bits(3u);
-    let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
-    let block_index = vertex.vert_data >> 24u & x_positive_bits(8u);
+    let face_id = vertex.index >> 2;
+    let vertex_id = vertex.index & 3u;
+
+    let face = face_buffer[face_id];
+    let model = model_buffer[face.model_id];
+
+    let vertex_position = model.positions[vertex_id];
+    let vertex_uv = model.uv[vertex_id];
+    let normal = model.normal;
+
+    let face_x = f32(face.pos_ao & x_positive_bits(5u));
+    let face_y = f32(face.pos_ao >> 5u & x_positive_bits(5u));
+    let face_z = f32(face.pos_ao >> 10u & x_positive_bits(5u));
+
+    // AO only for all corners of the voxel.
+    // Need to use this to get the correct AO value for the face.
+    let model_ao_index = (model.ao >> (vertex_id * 3u)) & 3u;
+
+    let ao = face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
+
+    let x = face_x + vertex_position.x;
+    let y = face_y + vertex_position.y;
+    let z = face_z + vertex_position.z;
 
     let local_position = vec4<f32>(x,y,z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;
@@ -87,12 +127,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.ambient = ambient_lerp;
     out.world_position = world_position;
     
-
-    let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
 
-    out.blend_color = block_color[block_index];
-    out.blend_emissive = block_emissive[block_index];
+    out.uv = vertex_uv;
+
     out.instance_index = vertex.instance_index;
     return out;
 }
@@ -137,65 +175,4 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #endif
 
     return out;
-}
-
-//  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket, Johan Helsing
-//
-fn mod289(x: vec2f) -> vec2f {
-    return x - floor(x * (1. / 289.)) * 289.;
-}
-
-fn mod289_3(x: vec3f) -> vec3f {
-    return x - floor(x * (1. / 289.)) * 289.;
-}
-
-fn permute3(x: vec3f) -> vec3f {
-    return mod289_3(((x * 34.) + 1.) * x);
-}
-
-//  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket
-fn simplexNoise2(v: vec2f) -> f32 {
-    let C = vec4(
-        0.211324865405187, // (3.0-sqrt(3.0))/6.0
-        0.366025403784439, // 0.5*(sqrt(3.0)-1.0)
-        -0.577350269189626, // -1.0 + 2.0 * C.x
-        0.024390243902439 // 1.0 / 41.0
-    );
-
-    // First corner
-    var i = floor(v + dot(v, C.yy));
-    let x0 = v - i + dot(i, C.xx);
-
-    // Other corners
-    var i1 = select(vec2(0., 1.), vec2(1., 0.), x0.x > x0.y);
-
-    // x0 = x0 - 0.0 + 0.0 * C.xx ;
-    // x1 = x0 - i1 + 1.0 * C.xx ;
-    // x2 = x0 - 1.0 + 2.0 * C.xx ;
-    var x12 = x0.xyxy + C.xxzz;
-    x12.x = x12.x - i1.x;
-    x12.y = x12.y - i1.y;
-
-    // Permutations
-    i = mod289(i); // Avoid truncation effects in permutation
-
-    var p = permute3(permute3(i.y + vec3(0., i1.y, 1.)) + i.x + vec3(0., i1.x, 1.));
-    var m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), vec3(0.));
-    m *= m;
-    m *= m;
-
-    // Gradients: 41 points uniformly over a line, mapped onto a diamond.
-    // The ring size 17*17 = 289 is close to a multiple of 41 (41*7 = 287)
-    let x = 2. * fract(p * C.www) - 1.;
-    let h = abs(x) - 0.5;
-    let ox = floor(x + 0.5);
-    let a0 = x - ox;
-
-    // Normalize gradients implicitly by scaling m
-    // Approximation of: m *= inversesqrt( a0*a0 + h*h );
-    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-
-    // Compute final noise value at P
-    let g = vec3(a0.x * x0.x + h.x * x0.y, a0.yz * x12.xz + h.yz * x12.yw);
-    return 130. * dot(m, g);
 }

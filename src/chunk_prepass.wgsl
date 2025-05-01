@@ -24,6 +24,8 @@ struct ChunkMaterial {
 };
 
 @group(2) @binding(0) var<uniform> material: ChunkMaterial;
+@group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
+@group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -31,7 +33,7 @@ fn x_positive_bits(bits: u32) -> u32{
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
-    @location(0) vert_data: u32,
+    @builtin(vertex_index) index: u32
     // @location(0) position: vec3<f32>,
     // @location(0) vert_data: u32,
     // @location(1) blend_color: vec4<f32>,
@@ -42,32 +44,31 @@ struct MyVertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
     @location(2) clip_position_unclamped: vec4<f32>,
-    // @location(4) blend_color: vec3<f32>,
-    // @location(5) ambient: f32,
 };
-
-// indexing an array has to be in some memory
-// by declaring this as a var instead it works
-var<private> normals: array<vec3<f32>,6> = array<vec3<f32>,6> (
-	vec3<f32>(-1.0, 0.0, 0.0), // Left
-	vec3<f32>(1.0, 0.0, 0.0), // Right
-	vec3<f32>(0.0, -1.0, 0.0), // Down
-	vec3<f32>(0.0, 1.0, 0.0), // Up
-	vec3<f32>(0.0, 0.0, -1.0), // Back
-	vec3<f32>(0.0, 0.0, 1.0) // Forward
-);
 
 @vertex
 fn vertex(vertex: Vertex) -> MyVertexOutput {
     var out: MyVertexOutput;
 
-    let x = f32(vertex.vert_data & x_positive_bits(6u));
-    let y = f32(vertex.vert_data >> 6u & x_positive_bits(6u));
-    let z = f32(vertex.vert_data >> 12u & x_positive_bits(6u));
-    let ao = vertex.vert_data >> 18u & x_positive_bits(3u);
-    let normal_index = vertex.vert_data >> 21u & x_positive_bits(3u);
+    
+    let face_id = vertex.index >> 2;
+    let vertex_id = vertex.index & 3u;
 
-    let normal = normals[normal_index];
+    let face = face_buffer[face_id];
+    let model = model_buffer[face.model_id];
+
+    let vertex_position = model.positions[vertex_id];
+    let vertex_uv = model.uv[vertex_id];
+    let normal = model.normal;
+
+    let face_x = f32(face.pos_ao & x_positive_bits(5u));
+    let face_y = f32(face.pos_ao >> 5u & x_positive_bits(5u));
+    let face_z = f32(face.pos_ao >> 10u & x_positive_bits(5u));
+
+    let x = face_x + vertex_position.x;
+    let y = face_y + vertex_position.y;
+    let z = face_z + vertex_position.z;
+
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
 
     let local_position = vec4<f32>(x,y,z, 1.0);

@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use bevy::{color::Color, ecs::system::Resource, utils::HashMap};
 
+use crate::models::model::ModelId;
+
 /// The on disk identifier for a block.
 /// Consistent between adding & removing block types.
 #[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,7 +39,9 @@ pub struct BlockRegistry {
     pub block_flags: Vec<BlockFlags>,
     /// Maps block id to block color.
     pub block_color: Vec<Color>,
-    pub block_emissive: Vec<Color>
+    pub block_emissive: Vec<Color>,
+
+    pub block_model: Vec<ModelId>,
 }
 impl BlockRegistry {
     #[inline]
@@ -69,6 +73,7 @@ impl BlockRegistry {
         self.block_flags.push(flags); 
         self.block_color.push(block.color);
         self.block_emissive.push(block.emissive_color);
+        self.block_model.push(block.model_id);
 
         self.block_string_identifier_to_id.insert(identifier, block_id);
 
@@ -95,6 +100,7 @@ pub struct Block {
     pub collision: bool,
     pub color: Color,
     pub emissive_color: Color,
+    pub model_id: ModelId,
 }
 impl Default for Block {
     fn default() -> Self {
@@ -103,6 +109,7 @@ impl Default for Block {
             collision: true,
             color: Color::srgb(1.0, 0.0, 1.0),
             emissive_color: Color::NONE,
+            model_id: ModelId(0),
         }
     }
 }

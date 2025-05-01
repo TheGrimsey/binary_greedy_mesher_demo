@@ -1,19 +1,19 @@
-use std::{f32::consts::PI, sync::Arc};
+use std::sync::Arc;
 
 use bevy::{
     color::palettes::css, core::TaskPoolThreadAssignmentPolicy, core_pipeline::oit::OrderIndependentTransparencySettings, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
-        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, view::NoFrustumCulling, RenderPlugin
+        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
     }
 };
 
-use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin, ResourceInspectorPlugin};
+use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin};
 use bevy_screen_diagnostics::{
     ScreenDiagnosticsPlugin, ScreenEntityDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin,
 };
 
 use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
-    chunk::{self, ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D}, constants::CHUNK_SIZE3, diagnostics::VoxelDiagnosticsPlugin, rendering::{
+    chunk::{ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D}, constants::CHUNK_SIZE3, diagnostics::VoxelDiagnosticsPlugin, models::IndexedModelRegistry, rendering::{
         ChunkMaterial,
         RenderingPlugin,
     }, scanner::{DataScanner, MeshScanner, Scanner}, utils::{index_to_ivec3, world_to_chunk}, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
@@ -69,6 +69,8 @@ fn main() {
 fn load_block_registry(
     mut commands: Commands,
 ) {
+    let mut model_registry = IndexedModelRegistry::default();
+
     // TODO: Actually load a block registry from assets. For now, just add some dummy blocks.
     let mut block_registry = BlockRegistry::default();
     let _ = block_registry.add_block(

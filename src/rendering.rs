@@ -9,7 +9,7 @@ use bevy::{
 };
 use indexmap::IndexSet;
 
-use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
+use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelQuad, ModelRegistry}, IndexedModel, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
 
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
@@ -32,8 +32,7 @@ impl Plugin for RenderingPlugin {
 
         app.init_resource::<MeshingPipeline>().init_resource::<ChunkMeshEntities>();
 
-        app.add_systems(Startup, initialize_global_chunk_materials);
-        app.add_systems(Update, apply_chunk_material);
+        app.add_systems(PostStartup, initialize_global_material_buffers);
 
         load_internal_asset!(
             app,
@@ -57,99 +56,60 @@ impl Plugin for RenderingPlugin {
     }
 }
 
-fn initialize_global_chunk_materials(
+#[derive(Resource)]
+pub struct SharedMaterialBuffers {
+    pub model_buffer: Handle<ShaderStorageBuffer>,
+} 
+
+fn initialize_global_material_buffers(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
-    mut chunk_materials_wireframe: ResMut<Assets<ChunkMaterialWireframe>>,
-    mut chunk_materials: ResMut<Assets<ChunkMaterial>>,
     mut commands: Commands,
     block_registry: Res<BlockRegistryResource>,
+    mut model_registry: ResMut<ModelRegistry>
 ) {
     let colors = block_registry.0.block_color.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
     let colors = buffers.add(ShaderStorageBuffer::from(colors));
     
     let emissive = block_registry.0.block_emissive.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
     let emissive = buffers.add(ShaderStorageBuffer::from(emissive));
-
-    // TODO: Add transparent material.
     
-    commands.insert_resource(GlobalChunkMaterial {
-        opaque: chunk_materials.add(ChunkMaterial {
-            reflectance: 0.5,
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
-            block_colors: colors.clone(),
-            block_emissive: emissive.clone(),
-            alpha_mode: AlphaMode::Opaque
-        }),
-        transparent: chunk_materials.add(ChunkMaterial {
-            reflectance: 0.5,
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
-            block_colors: colors.clone(),
-            block_emissive: emissive.clone(),
-            alpha_mode: AlphaMode::Premultiplied
-        }),   
+    // TODO: Create IndexedModelRegistryResource and add it to the shader storage buffer.
+    // 1. Iterate over each model in the registry.
+    // 2. Add every quad to a temporary Vec<>, save the start and end indexes of each quad range.
+
+    let mut indexed_models = vec![];
+
+    let mut model_quads = vec![];
+    for model in model_registry.models.iter_mut() {
+        model.quads.sort_by(|a, b| a.cull_face.cmp(&b.cull_face));
+
+        let start_index = model_quads.len() as u32;
+        model_quads.extend(model.unculled_quads.iter().cloned());
+        let end_index = model_quads.len() as u32;
+    
+        let mut indexed_model = IndexedModel {
+            always_visible_faces: QuadRange { start: start_index, end: end_index },
+            occluded_faces: [QuadRange { start: 0, end: 0 }; 6],
+        };
+
+        // TODO: Handle cullable faces.
+
+        model_quads.push(model.always_visible_faces.start);
+        model_quads.push(model.always_visible_faces.end);
+        for quad_range in &model.occluded_faces {
+            model_quads.push(quad_range.start);
+            model_quads.push(quad_range.end);
+        }
+
+        indexed_models.push(indexed_model);
+    }
+
+    let model_buffer = buffers.add(ShaderStorageBuffer::from(model_quads));
+    
+    commands.insert_resource(SharedMaterialBuffers {
+        model_buffer,
     });
-
-    
-    commands.insert_resource(GlobalChunkWireframeMaterial(chunk_materials_wireframe.add(
-        ChunkMaterialWireframe {
-            reflectance: 0.5,
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
-            block_colors: colors.clone(),
-            block_emissive: emissive.clone(),
-        },
-    )));
 }
-
-fn apply_chunk_material(
-    no_wireframe: Query<Entity, With<MeshMaterial3d<ChunkMaterial>>>,
-    wireframe: Query<(Entity, &ChunkEntityType), With<MeshMaterial3d<ChunkMaterialWireframe>>>,
-    input: Res<ButtonInput<KeyCode>>,
-    mut mode: ResMut<ChunkMaterialWireframeMode>,
-    mut commands: Commands,
-    chunk_mat: Res<GlobalChunkMaterial>,
-    chunk_mat_wireframe: Res<GlobalChunkWireframeMaterial>,
-) {
-    if !input.just_pressed(KeyCode::KeyT) {
-        return;
-    }
-    use ChunkMaterialWireframeMode as F;
-    *mode = match *mode {
-        F::On => F::Off,
-        F::Off => F::On,
-    };
-    match *mode {
-        F::On => {
-            for entity in no_wireframe.iter() {
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(chunk_mat_wireframe.0.clone()))
-                    .remove::<MeshMaterial3d<ChunkMaterial>>();
-            }
-        }
-        F::Off => {
-            for (entity, chunk_type) in wireframe.iter() {
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(match chunk_type {
-                        ChunkEntityType::Opaque => chunk_mat.opaque.clone(),
-                        ChunkEntityType::Transparent => chunk_mat.transparent.clone(),
-                    }))
-                    .remove::<MeshMaterial3d<ChunkMaterialWireframe>>();
-            }
-        }
-    }
-}
-
-#[derive(Resource, Reflect)]
-pub struct GlobalChunkMaterial {
-    pub opaque: Handle<ChunkMaterial>,
-    pub transparent: Handle<ChunkMaterial>,
-}
-#[derive(Resource, Reflect)]
-pub struct GlobalChunkWireframeMaterial(pub Handle<ChunkMaterialWireframe>);
 
 #[derive(Component)]
 pub enum ChunkEntityType {
@@ -168,10 +128,10 @@ pub struct ChunkMaterial {
     pub metallic: f32,
 
     #[storage(1,read_only)]
-    pub block_colors: Handle<ShaderStorageBuffer>,
-    
+    pub model_buffer: Handle<ShaderStorageBuffer>,
+
     #[storage(2,read_only)]
-    pub block_emissive: Handle<ShaderStorageBuffer>,
+    pub face_buffer: Handle<ShaderStorageBuffer>,
 
     pub alpha_mode: AlphaMode,
 }
@@ -282,6 +242,7 @@ pub fn start_mesh_tasks(
     voxel_engine: Res<VoxelEngine>,
     scanners: Query<&ChunkPos, With<Scanner<MeshScanner>>>,
     block_registry: Res<BlockRegistryResource>,
+    model_registry: Res<IndexedModelRegistryResource>,
     mut chunk_gained_mesh_relevance: EventReader<ChunkGainedScannerRelevance<MeshScanner>>,
     mut chunk_modified: EventReader<ChunkModified>,
     global_mesh_scanner_chunks: Res<GlobalScannerDesiredChunks<MeshScanner>>
@@ -341,12 +302,13 @@ pub fn start_mesh_tasks(
         
         let llod = *lod;
         let block_registry = block_registry.0.clone();
+        let model_registry = model_registry.0.clone();
         
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
-                    opaque: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry.clone(), BlockFlags::SOLID, true, false),
-                    transparent: crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod, block_registry, BlockFlags::TRANSPARENT, true, false)
+                    opaque: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, BlockFlags::SOLID, true),
+                    transparent: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, BlockFlags::TRANSPARENT, true)
                 }
             }),
         };
@@ -388,11 +350,13 @@ pub fn unload_mesh(
 
 /// join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
 pub fn join_mesh(
+    mut shader_storage_buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut mesh_pipeline: ResMut<MeshingPipeline>,
     mut chunk_mesh_entities: ResMut<ChunkMeshEntities>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    global_chunk_material: Res<GlobalChunkMaterial>,
+    mut materials: ResMut<Assets<ChunkMaterial>>,
+    shared_material_buffers: Res<SharedMaterialBuffers>,
 ) {
     let MeshingPipeline {
         mesh_tasks,
@@ -430,32 +394,50 @@ pub fn join_mesh(
             chunk_mesh_entities.0.insert(*world_pos, chunk_entity.id());
 
             if let Some(mesh) = chunk_mesh_task.opaque.take() {
-                total_vertex_count += mesh.vertices.len();
-
+                total_vertex_count += mesh.faces.len() * 4;
+                
                 let aabb = mesh.calculate_aabb();
-                let bevy_mesh = mesh.to_bevy_mesh();
+                let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
+                
+                let face_buffer = shader_storage_buffers.add(ShaderStorageBuffer::from(faces));
                 
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
-                    MeshMaterial3d(global_chunk_material.opaque.clone()),
+                    MeshMaterial3d(materials.add(ChunkMaterial {
+                        reflectance: 0.5,
+                        perceptual_roughness: 1.0,
+                        metallic: 0.01,
+                        model_buffer: shared_material_buffers.model_buffer.clone(),
+                        face_buffer,
+                        alpha_mode: AlphaMode::Opaque,
+                    })),
                     ChunkEntityType::Opaque,
                     Name::new("Opaque")
                 ));
             }
 
             if let Some(mesh) = chunk_mesh_task.transparent.take() {
-                total_vertex_count += mesh.vertices.len();
+                total_vertex_count += mesh.faces.len() * 4;
 
                 let aabb = mesh.calculate_aabb();
-                let bevy_mesh = mesh.to_bevy_mesh();
+                
+                let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
+                let face_buffer = shader_storage_buffers.add(ShaderStorageBuffer::from(faces));
                 
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
-                    MeshMaterial3d(global_chunk_material.transparent.clone()),
+                    MeshMaterial3d(materials.add(ChunkMaterial {
+                        reflectance: 0.5,
+                        perceptual_roughness: 1.0,
+                        metallic: 0.01,
+                        model_buffer: shared_material_buffers.model_buffer.clone(),
+                        face_buffer,
+                        alpha_mode: AlphaMode::Premultiplied,
+                    })),
                     ChunkEntityType::Transparent,
                     Name::new("Transparent")
                 ));

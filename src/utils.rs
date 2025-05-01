@@ -91,16 +91,16 @@ pub fn make_vertex_u32(
 }
 
 #[inline]
-fn x_positive_bits(bits: u32) -> u32{
+const fn x_positive_bits(bits: u32) -> u32{
     (1 << bits) - 1
 }
 
 #[inline]
 pub fn get_pos_from_vertex_u32(vertex: u32) -> IVec3 {
     IVec3::new(
-        (vertex & x_positive_bits(6)) as i32,
-        ((vertex >> 6) & x_positive_bits(6)) as i32,
-        ((vertex >> 12) & x_positive_bits(6)) as i32,
+        (vertex & x_positive_bits(5)) as i32,
+        ((vertex >> 5) & x_positive_bits(5)) as i32,
+        ((vertex >> 10) & x_positive_bits(5)) as i32,
     )
 }
 
@@ -117,8 +117,8 @@ pub fn world_to_chunk_local_voxel(voxel: IVec3) -> IVec3 {
 /// generate a vec of indices
 /// assumes vertices are made of quads, and counter clockwise ordered
 #[inline]
-pub fn generate_indices(vertex_count: usize) -> Vec<u32> {
-    let indices_count = vertex_count / 4;
+pub fn generate_indices(faces: usize) -> Vec<u32> {
+    let indices_count = faces;
     let mut indices = Vec::<u32>::with_capacity(indices_count * 6);
     (0..indices_count).for_each(|vert_index| {
         let vert_index = vert_index as u32 * 4u32;
