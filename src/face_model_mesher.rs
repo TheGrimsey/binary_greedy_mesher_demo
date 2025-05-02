@@ -69,7 +69,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &Blo
         None
     } else {
         mesh.indices = generate_indices(mesh.faces.len());
-        info!("Mesh faces: {}, incides: {}", mesh.faces.len(), mesh.indices.len());
+        info!("Mesh faces: {}, indices: {}", mesh.faces.len(), mesh.indices.len());
         Some(mesh)
     }
 }

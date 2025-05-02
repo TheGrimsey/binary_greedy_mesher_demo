@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy::{
-    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, math::ivec3, pbr::{CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusion, ScreenSpaceAmbientOcclusionQualityLevel}, prelude::*, render::{
+    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
         settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
     }, utils::hashbrown::HashMap
 };
@@ -91,7 +91,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::X,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
             (
@@ -110,7 +110,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::NEG_X,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
             (
@@ -129,7 +129,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::Z,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
             (
@@ -148,7 +148,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::NEG_Z,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
             (
@@ -167,7 +167,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::Y,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
             (
@@ -186,7 +186,7 @@ fn load_block_registry(
                         Vec2::new(0.0, 1.0),
                     ],
                     normal: Vec3::NEG_Y,
-                    ao: 0b111111111111,
+                    ao: 0,
                 }]
             ),
         ]),
@@ -257,7 +257,7 @@ pub fn setup(
     commands.spawn((
         Transform::default(),
         Scanner::<DataScanner>::new(2, Some(5)),
-        Scanner::<MeshScanner>::new(1, Some(1)), 
+        Scanner::<MeshScanner>::new(0, Some(0)), 
     ));
 
     commands

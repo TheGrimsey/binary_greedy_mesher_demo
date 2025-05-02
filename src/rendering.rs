@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy::{
-    asset::load_internal_asset, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
+    asset::{load_internal_asset, RenderAssetUsages}, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
         mesh::MeshVertexBufferLayoutRef,
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
@@ -100,7 +100,10 @@ fn initialize_global_material_buffers(
         models: indexed_models,
     })));
 
-    let model_buffer = buffers.add(ShaderStorageBuffer::from(model_quads));
+    let mut model_buffer = ShaderStorageBuffer::from(model_quads);
+    model_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
+
+    let model_buffer = buffers.add(model_buffer);
     
     commands.insert_resource(SharedMaterialBuffers {
         model_buffer,
@@ -264,7 +267,7 @@ pub fn start_mesh_tasks(
         let _span = info_span!("Sorting meshing queue by distance to scanners").entered();
         mesh_pipeline.load_mesh_queue.sort_by_cached_key(|pos| {
             let mut closest_distance = i32::MAX;
-            // TODO: This could use bevy_spatial for better performance.
+            
             for scan_pos in scanners.iter() {
                 let distance = pos.distance_squared(scan_pos.0);
                 if distance < closest_distance {
@@ -274,6 +277,7 @@ pub fn start_mesh_tasks(
 
             -closest_distance
         });
+
     }
 
     let mut i = mesh_pipeline.load_mesh_queue.len();
@@ -291,7 +295,6 @@ pub fn start_mesh_tasks(
             continue;
         }
         mesh_pipeline.load_mesh_queue.swap_remove(&world_pos);
-        info!("Queued chunk mesh task for {:?}", world_pos);
 
         let Some(chunks_refs) = ChunksRefs::try_new(world_data, world_pos) else {
             continue;
@@ -397,7 +400,14 @@ pub fn join_mesh(
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
                 
-                let face_buffer = shader_storage_buffers.add(ShaderStorageBuffer::from(faces));
+                let face_count = faces.len();
+                info!("({world_pos}): Face count: {face_count}, First Face: {:?}", &faces[0..5]);
+
+                let mut face_buffer = ShaderStorageBuffer::from(faces);
+                face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
+
+                info!("Created face buffer: {} bytes. First bytes: {:?}", face_buffer.data.as_ref().unwrap().len(), &face_buffer.data.as_ref().unwrap()[0..24]);
+                let face_buffer = shader_storage_buffers.add(face_buffer);
                 
                 chunk_entity.with_child((
                     aabb,
@@ -422,7 +432,16 @@ pub fn join_mesh(
                 
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
-                let face_buffer = shader_storage_buffers.add(ShaderStorageBuffer::from(faces));
+
+                let face_count = faces.len();
+                let first_face = faces[0];
+                info!("Face count: {face_count}, First Face: {first_face:?}");
+
+                let mut face_buffer = ShaderStorageBuffer::from(faces);
+                face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
+
+                info!("Created face buffer: {} bytes", face_buffer.data.as_ref().unwrap().len());
+                let face_buffer = shader_storage_buffers.add(face_buffer);
                 
                 chunk_entity.with_child((
                     aabb,

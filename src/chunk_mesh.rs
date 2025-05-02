@@ -40,10 +40,10 @@ impl ChunkMesh {
     }
 }
 
-#[derive(ShaderType)]
+#[derive(ShaderType, Debug, Clone, Copy)]
 pub struct Face {
-    /// Voxel position in the chunk (x, y, z) 3 * 6 bits
-    /// AO per vertex 4 * 3 bits
+    /// Voxel position in the chunk (x, y, z) 3 * 5 bits
+    /// AO per voxel corner 8 * 2 bits
     pub pos_ao: u32,
 
     pub model_id: u32,

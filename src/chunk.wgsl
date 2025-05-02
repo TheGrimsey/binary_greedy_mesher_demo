@@ -92,8 +92,11 @@ fn x_positive_bits(bits: u32) -> u32{
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let face_id = vertex.index >> 2;
-    let vertex_id = vertex.index & 3u;
+    let first_vertex = mesh[vertex.instance_index].first_vertex_index;
+    let vertex_index = vertex.index - first_vertex;
+
+    let face_id = vertex_index >> 2;
+    let vertex_id = vertex_index & 3u;
 
     let face = face_buffer[face_id];
     let model_quad = model_buffer[face.model_id];
@@ -110,7 +113,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // Need to use this to get the correct AO value for the face.
     let model_ao_index = (model_quad.ao >> (vertex_id * 3u)) & 3u;
 
-    let ao = face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
+    let ao = 0; //face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
 
     let x = face_x + vertex_position.x;
     let y = face_y + vertex_position.y;

@@ -205,7 +205,7 @@ pub fn start_modifications(
         updated_and_adjecant_chunks_set.insert(chunk_pos);
     }
 
-    events.send_batch(updated_and_adjecant_chunks_set.iter().cloned().map(ChunkModified));
+    events.send_batch(updated_and_adjecant_chunks_set.drain().map(ChunkModified));
 }
 
 /// join the chunkdata threads
