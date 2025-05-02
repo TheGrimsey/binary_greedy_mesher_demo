@@ -118,10 +118,9 @@ pub fn world_to_chunk_local_voxel(voxel: IVec3) -> IVec3 {
 /// assumes vertices are made of quads, and counter clockwise ordered
 #[inline]
 pub fn generate_indices(faces: usize) -> Vec<u32> {
-    let indices_count = faces;
-    let mut indices = Vec::<u32>::with_capacity(indices_count * 6);
-    (0..indices_count).for_each(|vert_index| {
-        let vert_index = vert_index as u32 * 4u32;
+    let mut indices = Vec::with_capacity(faces * 6);
+    (0..faces).for_each(|vert_index| {
+        let vert_index = vert_index as u32 * 4;
         indices.push(vert_index);
         indices.push(vert_index + 1);
         indices.push(vert_index + 2);

@@ -23,6 +23,28 @@ struct ChunkMaterial {
     // _padding: f32,
 };
 
+struct Face {
+    /// Block Position: X,Y,Z - 5 bits each (0-31)
+    /// AO - 2 bits * 8 (one for each corner of the voxel)
+    /// Final 1 bit unused.
+    pos_ao: u32,
+
+    /// Index into the model buffer
+    model_id: u32,
+    texture_id: u32,
+}
+
+struct ModelQuad {
+    positions: array<vec3<f32>, 4>,
+    uv: array<vec2<f32>, 4>,
+    normal: vec3<f32>,
+
+    // AO corner (of the 8 corners) for each vertex.
+    // 3 bits per vertex, 4 vertices.
+    // 12 bits total, packed into a u32.
+    ao: u32
+}
+
 @group(2) @binding(0) var<uniform> material: ChunkMaterial;
 @group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
 @group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
@@ -34,9 +56,6 @@ fn x_positive_bits(bits: u32) -> u32{
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
     @builtin(vertex_index) index: u32
-    // @location(0) position: vec3<f32>,
-    // @location(0) vert_data: u32,
-    // @location(1) blend_color: vec4<f32>,
 };
 
 struct MyVertexOutput {
@@ -55,11 +74,11 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
     let vertex_id = vertex.index & 3u;
 
     let face = face_buffer[face_id];
-    let model = model_buffer[face.model_id];
+    let model_quad = model_buffer[face.model_id];
 
-    let vertex_position = model.positions[vertex_id];
-    let vertex_uv = model.uv[vertex_id];
-    let normal = model.normal;
+    let vertex_position = model_quad.positions[vertex_id];
+    let vertex_uv = model_quad.uv[vertex_id];
+    let normal = model_quad.normal;
 
     let face_x = f32(face.pos_ao & x_positive_bits(5u));
     let face_y = f32(face.pos_ao >> 5u & x_positive_bits(5u));

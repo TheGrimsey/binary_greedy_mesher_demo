@@ -22,6 +22,9 @@ impl ChunkMesh {
         
         bevy_mesh.insert_indices(Indices::U32(self.indices));
 
+        // Hack becasue bevy doesn't support having no vertex data :( Will panic trying to do a div by zero otherwise
+        bevy_mesh.insert_attribute(ATTRIBUTE_VOXEL, std::iter::repeat_n(0, self.faces.len() * 4).collect::<Vec<u32>>());
+
         (bevy_mesh, self.faces)
     }
 

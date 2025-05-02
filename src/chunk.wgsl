@@ -96,11 +96,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let vertex_id = vertex.index & 3u;
 
     let face = face_buffer[face_id];
-    let model = model_buffer[face.model_id];
+    let model_quad = model_buffer[face.model_id];
 
-    let vertex_position = model.positions[vertex_id];
-    let vertex_uv = model.uv[vertex_id];
-    let normal = model.normal;
+    let vertex_position = model_quad.positions[vertex_id];
+    let vertex_uv = model_quad.uv[vertex_id];
+    let normal = model_quad.normal;
 
     let face_x = f32(face.pos_ao & x_positive_bits(5u));
     let face_y = f32(face.pos_ao >> 5u & x_positive_bits(5u));
@@ -108,7 +108,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // AO only for all corners of the voxel.
     // Need to use this to get the correct AO value for the face.
-    let model_ao_index = (model.ao >> (vertex_id * 3u)) & 3u;
+    let model_ao_index = (model_quad.ao >> (vertex_id * 3u)) & 3u;
 
     let ao = face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
 
@@ -156,8 +156,8 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    pbr_input.material.base_color = vec4<f32>(input.blend_color.xyz * input.ambient, input.blend_color.w);
-    pbr_input.material.emissive = input.blend_emissive;
+    //pbr_input.material.base_color = vec4<f32>(input.blend_color.xyz * input.ambient, input.blend_color.w);
+    //pbr_input.material.emissive = input.blend_emissive;
 
     pbr_input.material.reflectance = chunk_material.reflectance;
     pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;

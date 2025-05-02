@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::{
     asset::load_internal_asset, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
         mesh::MeshVertexBufferLayoutRef,
@@ -9,7 +11,7 @@ use bevy::{
 };
 use indexmap::IndexSet;
 
-use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelQuad, ModelRegistry}, IndexedModel, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
+use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelRegistry, DIRECTIONS}, IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
 
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
@@ -64,15 +66,8 @@ pub struct SharedMaterialBuffers {
 fn initialize_global_material_buffers(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut commands: Commands,
-    block_registry: Res<BlockRegistryResource>,
     mut model_registry: ResMut<ModelRegistry>
 ) {
-    let colors = block_registry.0.block_color.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
-    let colors = buffers.add(ShaderStorageBuffer::from(colors));
-    
-    let emissive = block_registry.0.block_emissive.iter().map(|color| color.to_linear().to_f32_array()).collect::<Vec<_>>();
-    let emissive = buffers.add(ShaderStorageBuffer::from(emissive));
-    
     // TODO: Create IndexedModelRegistryResource and add it to the shader storage buffer.
     // 1. Iterate over each model in the registry.
     // 2. Add every quad to a temporary Vec<>, save the start and end indexes of each quad range.
@@ -81,8 +76,6 @@ fn initialize_global_material_buffers(
 
     let mut model_quads = vec![];
     for model in model_registry.models.iter_mut() {
-        model.quads.sort_by(|a, b| a.cull_face.cmp(&b.cull_face));
-
         let start_index = model_quads.len() as u32;
         model_quads.extend(model.unculled_quads.iter().cloned());
         let end_index = model_quads.len() as u32;
@@ -92,17 +85,20 @@ fn initialize_global_material_buffers(
             occluded_faces: [QuadRange { start: 0, end: 0 }; 6],
         };
 
-        // TODO: Handle cullable faces.
-
-        model_quads.push(model.always_visible_faces.start);
-        model_quads.push(model.always_visible_faces.end);
-        for quad_range in &model.occluded_faces {
-            model_quads.push(quad_range.start);
-            model_quads.push(quad_range.end);
+        for (quad_range, direction) in indexed_model.occluded_faces.iter_mut().zip(DIRECTIONS) {
+            if let Some(quads) = model.quads.get(&direction) {
+                quad_range.start = model_quads.len() as u32;
+                model_quads.extend(quads.iter().cloned());
+                quad_range.end = model_quads.len() as u32;
+            }
         }
 
         indexed_models.push(indexed_model);
     }
+
+    commands.insert_resource(IndexedModelRegistryResource(Arc::new(IndexedModelRegistry {
+        models: indexed_models,
+    })));
 
     let model_buffer = buffers.add(ShaderStorageBuffer::from(model_quads));
     
@@ -295,6 +291,7 @@ pub fn start_mesh_tasks(
             continue;
         }
         mesh_pipeline.load_mesh_queue.swap_remove(&world_pos);
+        info!("Queued chunk mesh task for {:?}", world_pos);
 
         let Some(chunks_refs) = ChunksRefs::try_new(world_data, world_pos) else {
             continue;

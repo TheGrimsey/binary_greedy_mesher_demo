@@ -1,4 +1,4 @@
-use bevy::{ecs::system::Resource, math::{Vec2, Vec3}, render::render_resource::ShaderType};
+use bevy::{ecs::system::Resource, math::{Vec2, Vec3}, render::render_resource::ShaderType, utils::HashMap};
 
 #[derive(ShaderType, Clone)]
 pub struct ModelQuad {
@@ -12,20 +12,23 @@ pub struct ModelQuad {
     pub ao: u32,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum Direction {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Direction {
     PosX, NegX, PosY, NegY, PosZ, NegZ,
 }
+pub const DIRECTIONS : [Direction; 6] = [
+    Direction::PosX,
+    Direction::NegX,
+    Direction::PosY,
+    Direction::NegY,
+    Direction::PosZ,
+    Direction::NegZ,
+];
 
-pub struct ModelQuadWithCull {
-    pub quad: ModelQuad,
-    pub cull_face: Direction,
-}
-
-struct BlockModel {
+pub struct BlockModel {
     pub unculled_quads: Vec<ModelQuad>,
 
-    pub quads: Vec<ModelQuadWithCull>,
+    pub quads: HashMap<Direction, Vec<ModelQuad>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -37,7 +40,7 @@ struct BlockTextureModel {
     texture_ids: Box<[u32]>,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct ModelRegistry {
     pub models: Vec<BlockModel>,  
 }

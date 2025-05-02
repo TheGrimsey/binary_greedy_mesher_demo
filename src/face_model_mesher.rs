@@ -5,17 +5,22 @@ use crate::{
 };
 
 const DIRECTION_OFFSET: [IVec3; 6] = [
-    IVec3::new(0, -1, 0), // Down
-    IVec3::new(0, 1, 0),  // Up
-    IVec3::new(-1, 0, 0), // Left
     IVec3::new(1, 0, 0),  // Right
-    IVec3::new(0, 0, -1), // Forward
+    IVec3::new(-1, 0, 0), // Left
+    IVec3::new(0, 1, 0),  // Up
+    IVec3::new(0, -1, 0), // Down
     IVec3::new(0, 0, 1),  // Back
+    IVec3::new(0, 0, -1), // Forward
 ];
 
 /// Builds a greedy mesh
 /// `flag_to_build`
 pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &BlockRegistry, model_registry: &IndexedModelRegistry, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
+    // early exit, if all faces are culled
+    if chunks_refs.is_all_voxels_same() {
+        return None;
+    }
+    
     let mut mesh = ChunkMesh::default();
 
     for z in 0..CHUNK_SIZE {
@@ -64,6 +69,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &Blo
         None
     } else {
         mesh.indices = generate_indices(mesh.faces.len());
+        info!("Mesh faces: {}, incides: {}", mesh.faces.len(), mesh.indices.len());
         Some(mesh)
     }
 }
