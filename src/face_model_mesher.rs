@@ -13,8 +13,6 @@ const DIRECTION_OFFSET: [IVec3; 6] = [
     IVec3::new(0, 0, -1), // Forward
 ];
 
-/// Builds a greedy mesh
-/// `flag_to_build`
 pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &BlockRegistry, model_registry: &IndexedModelRegistry, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {

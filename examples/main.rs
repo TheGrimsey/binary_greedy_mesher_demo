@@ -71,7 +71,7 @@ fn load_block_registry(
     mut commands: Commands,
 ) {
     let mut model_registry = ModelRegistry::default();
-
+    
     model_registry.models.push(BlockModel {
         unculled_quads: vec![],
         quads: HashMap::from([
@@ -92,7 +92,7 @@ fn load_block_registry(
                     ],
                     normal: Vec3::X,
                     ao: 0,
-                }]
+                }.with_ao_corner()],
             ),
             (
                 Direction::NegX,
@@ -111,7 +111,7 @@ fn load_block_registry(
                     ],
                     normal: Vec3::NEG_X,
                     ao: 0,
-                }]
+                }.with_ao_corner()]
             ),
             (
                 Direction::PosZ,
@@ -130,7 +130,7 @@ fn load_block_registry(
                     ],
                     normal: Vec3::Z,
                     ao: 0,
-                }]
+                }.with_ao_corner()]
             ),
             (
                 Direction::NegZ,
@@ -149,7 +149,7 @@ fn load_block_registry(
                     ],
                     normal: Vec3::NEG_Z,
                     ao: 0,
-                }]
+                }.with_ao_corner()]
             ),
             (
                 Direction::PosY,
@@ -168,7 +168,7 @@ fn load_block_registry(
                     ],
                     normal: Vec3::Y,
                     ao: 0,
-                }]
+                }.with_ao_corner()]
             ),
             (
                 Direction::NegY,
@@ -187,10 +187,12 @@ fn load_block_registry(
                     ],
                     normal: Vec3::NEG_Y,
                     ao: 0,
-                }]
+                }.with_ao_corner()]
             ),
         ]),
     });
+
+    info!("Model registry: {:?}", model_registry);
 
     // TODO: Actually load a block registry from assets. For now, just add some dummy blocks.
     let mut block_registry = BlockRegistry::default();

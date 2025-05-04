@@ -3,7 +3,7 @@ use std::{num::NonZero, sync::Arc};
 use bevy::{
     asset::{load_internal_asset, RenderAssetUsages}, ecs::system::{lifetimeless::SRes, SystemParamItem}, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
         mesh::MeshVertexBufferLayoutRef, render_asset::RenderAssets, render_resource::{
-            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer}, encase::UniformBuffer, AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, BindingType, BufferInitDescriptor, BufferUsages, OwnedBindingResource, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType, UnpreparedBindGroup
+            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer}, encase::UniformBuffer, AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, BufferInitDescriptor, BufferUsages, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType, UnpreparedBindGroup
         }, renderer::RenderDevice, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::{FallbackImage, GpuImage}
     }, tasks::{block_on, poll_once, AsyncComputeTaskPool, Task}, utils::HashMap
 };
@@ -253,24 +253,19 @@ impl AsBindGroup for ChunkMaterial {
                 (
                     0,
                     // Properties buffer
-                    // @group(0) @binding(0) var<uniform> properties: MaterialProperties;
                     uniform_buffer::<MaterialProperties>(false),
                 ),
                 (
                     1,
                     // Model buffer
-                    // @group(1) @binding(0) var<storage, read> model_buffer: array<Model>;
                     storage_buffer_read_only_sized(false, None),
                 ),
                 (
                     2,
                     // Face buffer
-                    // @group(1) @binding(1) var<storage, read> face_buffer: array<Face>;
                     storage_buffer_read_only_sized(false, None),
                 ),
-                // Screen texture
-                //
-                // @group(2) @binding(0) var textures: binding_array<texture_2d<f32>>;
+                // Voxel texture array
                 (
                     3,
                     texture_2d(TextureSampleType::Float { filterable: true })
@@ -537,8 +532,6 @@ pub fn join_mesh(
                 let aabb = mesh.calculate_aabb();
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
-                
-                let face_count = faces.len();
 
                 let mut face_buffer = ShaderStorageBuffer::from(faces);
                 face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
