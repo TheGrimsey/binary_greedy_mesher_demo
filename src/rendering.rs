@@ -1,12 +1,10 @@
-use std::sync::Arc;
+use std::{num::NonZero, sync::Arc};
 
 use bevy::{
-    asset::{load_internal_asset, RenderAssetUsages}, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
-        mesh::MeshVertexBufferLayoutRef,
-        render_resource::{
-            AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
-            SpecializedMeshPipelineError,
-        }, storage::ShaderStorageBuffer,
+    asset::{load_internal_asset, RenderAssetUsages}, ecs::system::{lifetimeless::SRes, SystemParamItem}, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
+        mesh::MeshVertexBufferLayoutRef, render_asset::RenderAssets, render_resource::{
+            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer}, encase::UniformBuffer, AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, BindingType, BufferInitDescriptor, BufferUsages, OwnedBindingResource, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType, UnpreparedBindGroup
+        }, renderer::RenderDevice, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::{FallbackImage, GpuImage}
     }, tasks::{block_on, poll_once, AsyncComputeTaskPool, Task}, utils::HashMap
 };
 use indexmap::IndexSet;
@@ -116,21 +114,24 @@ pub enum ChunkEntityType {
     Transparent,
 }
 
-// This is the struct that will be passed to your shader
-#[derive(Asset, Reflect, AsBindGroup, Debug, Clone)]
-pub struct ChunkMaterial {
-    #[uniform(0)]
-    pub reflectance: f32,
-    #[uniform(0)]
-    pub perceptual_roughness: f32,
-    #[uniform(0)]
-    pub metallic: f32,
+const MAX_TEXTURE_COUNT: usize = 256; // There's no true texture arrays :( WebGPU!!!! Very annoying :(
 
-    #[storage(1,read_only)]
+#[derive(Reflect, ShaderType, Debug, Clone, Copy)]
+pub struct MaterialProperties {
+    reflectance: f32,
+    perceptual_roughness: f32,
+    metallic: f32,
+}
+
+#[derive(Asset, Reflect, Debug, Clone)]
+pub struct ChunkMaterial {
+    pub properties: MaterialProperties,
+
     pub model_buffer: Handle<ShaderStorageBuffer>,
 
-    #[storage(2,read_only)]
     pub face_buffer: Handle<ShaderStorageBuffer>,
+
+    pub textures: Arc<[Handle<Image>]>,
 
     pub alpha_mode: AlphaMode,
 }
@@ -166,6 +167,136 @@ impl Material for ChunkMaterial {
         CHUNK_PREPASS_HANDLE.into()
     }
 }
+impl AsBindGroup for ChunkMaterial {
+    type Data = ();
+
+    type Param = (SRes<RenderAssets<GpuShaderStorageBuffer>>, SRes<RenderAssets<GpuImage>>, SRes<FallbackImage>);
+
+    fn as_bind_group(
+            &self,
+            layout: &BindGroupLayout,
+            render_device: &RenderDevice,
+            (storage_buffers, image_assets, fallback_image): &mut SystemParamItem<'_, '_, Self::Param>,
+        ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
+            // retrieve the render resources from handles
+            
+            let mut properties_buffer = UniformBuffer::new(Vec::new());
+            properties_buffer.write(&self.properties).unwrap();
+            
+            let properties_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+                label: None,
+                contents: properties_buffer.as_ref(),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+            let Some(model_buffer) = storage_buffers.get(&self.model_buffer) else {
+                return Err(AsBindGroupError::RetryNextUpdate);
+            };
+
+            let model_buffer = model_buffer.buffer.as_entire_buffer_binding();
+
+            let Some(face_buffer) = storage_buffers.get(&self.face_buffer) else {
+                return Err(AsBindGroupError::RetryNextUpdate);
+            };
+            let face_buffer = face_buffer.buffer.as_entire_buffer_binding();
+            
+            let mut images = vec![];
+            for handle in self.textures.iter().take(MAX_TEXTURE_COUNT) {
+                match image_assets.get(handle) {
+                    Some(image) => images.push(image),
+                    None => return Err(AsBindGroupError::RetryNextUpdate),
+                }
+            }
+
+            let fallback_image = &fallback_image.d2;
+
+            let mut textures = std::iter::repeat_n(&fallback_image.texture_view, MAX_TEXTURE_COUNT).map(|texture| &**texture).collect::<Vec<_>>();
+
+            // fill in up to the first `MAX_TEXTURE_COUNT` textures and samplers to the arrays
+            for (id, image) in images.into_iter().enumerate() {
+                textures[id] = &*image.texture_view;
+            }
+
+            let bind_group = render_device.create_bind_group(
+                "chunk_material_bind_group",
+                layout,
+                &BindGroupEntries::sequential((properties_buffer.as_entire_buffer_binding(), model_buffer, face_buffer, &textures[..], &fallback_image.sampler)),
+            );
+
+            Ok(PreparedBindGroup {
+                bindings: vec![],
+                bind_group,
+                data: (),
+            })
+    }
+
+    
+    fn unprepared_bind_group(
+        &self,
+        _layout: &BindGroupLayout,
+        _render_device: &RenderDevice,
+        _param: &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+        // we implement as_bind_group directly because
+        panic!("bindless texture arrays can't be owned")
+        // or rather, they can be owned, but then you can't make a `&'a [&'a TextureView]` from a vec of them in get_binding().
+    }
+
+    fn bind_group_layout_entries(_: &RenderDevice) -> Vec<BindGroupLayoutEntry>
+    where
+        Self: Sized,
+    {
+        BindGroupLayoutEntries::with_indices(
+            // The layout entries will only be visible in the fragment stage
+            ShaderStages::VERTEX_FRAGMENT,
+            (
+                (
+                    0,
+                    // Properties buffer
+                    // @group(0) @binding(0) var<uniform> properties: MaterialProperties;
+                    uniform_buffer::<MaterialProperties>(false),
+                ),
+                (
+                    1,
+                    // Model buffer
+                    // @group(1) @binding(0) var<storage, read> model_buffer: array<Model>;
+                    storage_buffer_read_only_sized(false, None),
+                ),
+                (
+                    2,
+                    // Face buffer
+                    // @group(1) @binding(1) var<storage, read> face_buffer: array<Face>;
+                    storage_buffer_read_only_sized(false, None),
+                ),
+                // Screen texture
+                //
+                // @group(2) @binding(0) var textures: binding_array<texture_2d<f32>>;
+                (
+                    3,
+                    texture_2d(TextureSampleType::Float { filterable: true })
+                        .count(NonZero::<u32>::new(MAX_TEXTURE_COUNT as u32).unwrap()),
+                ),
+                // Sampler
+                //
+                // @group(2) @binding(1) var nearest_sampler: sampler;
+                //
+                // Note: as with textures, multiple samplers can also be bound
+                // onto one binding slot:
+                //
+                // ```
+                // sampler(SamplerBindingType::Filtering)
+                //     .count(NonZero::<u32>::new(MAX_TEXTURE_COUNT as u32).unwrap()),
+                // ```
+                //
+                // One may need to pay attention to the limit of sampler binding
+                // amount on some platforms.
+                (4, sampler(SamplerBindingType::Filtering)),
+            ),
+        )
+        .to_vec()
+    }
+}
+
 // copy of chunk material pipeline but with wireframe
 #[derive(Asset, Reflect, AsBindGroup, Debug, Clone)]
 pub struct ChunkMaterialWireframe {
@@ -364,6 +495,13 @@ pub fn join_mesh(
         ..
     } = mesh_pipeline.as_mut();
 
+    
+    let properties = MaterialProperties {
+        reflectance: 0.5,
+        perceptual_roughness: 1.0,
+        metallic: 0.01,
+    };
+
     for (world_pos, task_option) in mesh_tasks.iter_mut() {
         let Some(mut task) = task_option.take() else {
             // should never happend, because we drop None values later
@@ -401,24 +539,21 @@ pub fn join_mesh(
                 let mesh_handle = meshes.add(bevy_mesh);
                 
                 let face_count = faces.len();
-                info!("({world_pos}): Face count: {face_count}, First Face: {:?}", &faces[0..5]);
 
                 let mut face_buffer = ShaderStorageBuffer::from(faces);
                 face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
 
-                info!("Created face buffer: {} bytes. First bytes: {:?}", face_buffer.data.as_ref().unwrap().len(), &face_buffer.data.as_ref().unwrap()[0..24]);
                 let face_buffer = shader_storage_buffers.add(face_buffer);
                 
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(materials.add(ChunkMaterial {
-                        reflectance: 0.5,
-                        perceptual_roughness: 1.0,
-                        metallic: 0.01,
+                        properties,
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Opaque,
+                        textures: Arc::new([]),
                     })),
                     ChunkEntityType::Opaque,
                     Name::new("Opaque")
@@ -433,26 +568,20 @@ pub fn join_mesh(
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
 
-                let face_count = faces.len();
-                let first_face = faces[0];
-                info!("Face count: {face_count}, First Face: {first_face:?}");
-
                 let mut face_buffer = ShaderStorageBuffer::from(faces);
                 face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
 
-                info!("Created face buffer: {} bytes", face_buffer.data.as_ref().unwrap().len());
                 let face_buffer = shader_storage_buffers.add(face_buffer);
                 
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(materials.add(ChunkMaterial {
-                        reflectance: 0.5,
-                        perceptual_roughness: 1.0,
-                        metallic: 0.01,
+                        properties,
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Premultiplied,
+                        textures: Arc::new([]),
                     })),
                     ChunkEntityType::Transparent,
                     Name::new("Transparent")

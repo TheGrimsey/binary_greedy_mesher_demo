@@ -76,18 +76,6 @@ fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
 }
 
-/*
-*   Vertex Buffer:
-    - X,Y,Z - 6 bits each
-    - AO - 3 bits
-
-*   Face Buffer:
-*   -  
-*   Model Buffer?
-*   - Face Normals
-*   - Face Colors
-*/
-
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
