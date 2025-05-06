@@ -32,6 +32,8 @@ struct ChunkMaterial {
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
 @group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
 @group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
+@group(2) @binding(3) var textures: binding_array<texture_2d<f32>>;
+@group(2) @binding(4) var nearest_sampler: sampler;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -101,7 +103,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // Need to use this to get the correct AO value for the face.
     let model_ao_index = (model_quad.ao >> (vertex_id * 3u)) & 3u;
 
-    let ao = 0; //face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
+    let ao = face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
 
     let x = face_x + vertex_position.x;
     let y = face_y + vertex_position.y;
@@ -147,7 +149,8 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    //pbr_input.material.base_color = vec4<f32>(input.blend_color.xyz * input.ambient, input.blend_color.w);
+    let color = textureSample(textures[input.texture_id], nearest_sampler, input.uv);
+    pbr_input.material.base_color = vec4(color.xyz * input.ambient, color.w);
     //pbr_input.material.emissive = input.blend_emissive;
 
     pbr_input.material.reflectance = chunk_material.reflectance;

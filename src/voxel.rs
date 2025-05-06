@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use bevy::{color::Color, ecs::system::Resource, utils::HashMap};
+use bevy::{ecs::system::Resource, utils::HashMap};
 
-use crate::models::model::ModelId;
+use crate::models::model::{ModelId, TexturedBlockModel, VoxelTexturingType};
 
 /// The on disk identifier for a block.
 /// Consistent between adding & removing block types.
@@ -37,11 +37,8 @@ pub struct BlockRegistry {
     pub block_id_to_string_identifier: Vec<BlockStringIdentifier>,
     /// Maps block id to block flags.
     pub block_flags: Vec<BlockFlags>,
-    /// Maps block id to block color.
-    pub block_color: Vec<Color>,
-    pub block_emissive: Vec<Color>,
 
-    pub block_model: Vec<ModelId>,
+    pub block_model: Vec<TexturedBlockModel>,
 }
 impl BlockRegistry {
     #[inline]
@@ -56,7 +53,7 @@ impl BlockRegistry {
     pub fn add_block(
         &mut self,
         identifier: BlockStringIdentifier,
-        block: &Block,
+        block: Block,
     ) -> BlockId{
         let mut flags = match block.visibility {
             BlockVisibilty::Solid => BlockFlags::SOLID,
@@ -70,10 +67,8 @@ impl BlockRegistry {
         let block_id = BlockId(self.block_id_to_string_identifier.len() as u16);
         
         self.block_id_to_string_identifier.push(identifier.clone());
-        self.block_flags.push(flags); 
-        self.block_color.push(block.color);
-        self.block_emissive.push(block.emissive_color);
-        self.block_model.push(block.model_id);
+        self.block_flags.push(flags);
+        self.block_model.push(block.model);
 
         self.block_string_identifier_to_id.insert(identifier, block_id);
 
@@ -98,18 +93,17 @@ pub enum BlockVisibilty {
 pub struct Block {
     pub visibility: BlockVisibilty,
     pub collision: bool,
-    pub color: Color,
-    pub emissive_color: Color,
-    pub model_id: ModelId,
+    pub model: TexturedBlockModel,
 }
 impl Default for Block {
     fn default() -> Self {
         Self {
             visibility: BlockVisibilty::Solid,
             collision: true,
-            color: Color::srgb(1.0, 0.0, 1.0),
-            emissive_color: Color::NONE,
-            model_id: ModelId(0),
+            model: TexturedBlockModel {
+                model: ModelId(0),
+                texture_ids: VoxelTexturingType::SingleTexture(0),
+            },
         }
     }
 }

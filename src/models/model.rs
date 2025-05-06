@@ -1,6 +1,6 @@
 use bevy::{ecs::system::Resource, math::{Vec2, Vec3}, render::render_resource::ShaderType, utils::HashMap};
 
-pub const AO_CORNERS: [[u32; 3]; 8] = [
+pub const AO_CORNERS: [[i32; 3]; 8] = [
     [0, 0, 0], // 0
     [1, 0, 0], // 1
     [0, 1, 0], // 2
@@ -87,9 +87,19 @@ pub struct BlockModel {
 pub struct ModelId(pub u32);
 
 // Model attached to a block.
-struct BlockTextureModel {
-    model: ModelId,
-    texture_ids: Box<[u32]>,
+#[derive(Debug, Clone)]
+pub struct TexturedBlockModel {
+    pub model: ModelId,
+    pub texture_ids: VoxelTexturingType,
+}
+
+#[derive(Debug, Clone)]
+pub enum VoxelTexturingType {
+    SingleTexture(u32),
+    MultiTexture {
+        // Texture IDs for each direction + unculled quads.
+        all_faces: Box<[Box<[u32]>; 7]>,
+    },
 }
 
 #[derive(Resource, Default, Debug)]
