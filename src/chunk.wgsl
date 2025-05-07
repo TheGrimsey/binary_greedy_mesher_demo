@@ -45,7 +45,7 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) ambient: f32,
+    @location(3) ambient: vec3<f32>,
     @location(4) instance_index: u32,
     @location(5) texture_id: u32,
 };
@@ -66,13 +66,20 @@ struct ModelQuad {
     uv: array<vec2<f32>, 4>,
     normal: vec3<f32>,
 
-    // AO corner (of the 8 corners) for each vertex.
-    // 3 bits per vertex, 4 vertices.
-    // 12 bits total, packed into a u32.
+    // 3 bits for which face the quad is on (0-5). 
+    // Nearest corner (of the 4 face-corners) to each vertex, used for AO.
+    // 2 bits per vertex, 4 vertices.
+    // 11 bits total, packed into a u32.
     ao: u32
 }
 
-var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
+//var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
+var<private> ambient_lerps: array<vec3<f32>, 4> = array<vec3<f32>, 4>(
+    vec3<f32>(1.0, 1.0, 1.0), // No occlusion
+    vec3<f32>(0.8, 0.8, 0.8), // Slight occlusion
+    vec3<f32>(0.5, 0.5, 0.5), // Moderate occlusion
+    vec3<f32>(0.2, 0.2, 0.2), // Full occlusion
+);
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -101,9 +108,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // AO only for all corners of the voxel.
     // Need to use this to get the correct AO value for the face.
-    let model_ao_index = (model_quad.ao >> (vertex_id * 3u)) & 3u;
+    let corner_index = (model_quad.ao >> (3u + vertex_id * 2u)) & x_positive_bits(2u);
+    let ao = (face.pos_ao >> (15u + corner_index * 2u)) & x_positive_bits(2u);
 
-    let ao = face.pos_ao >> (15u + model_ao_index * 2u) & 2u;
 
     let x = face_x + vertex_position.x;
     let y = face_y + vertex_position.y;

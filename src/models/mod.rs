@@ -6,12 +6,15 @@ pub mod model;
 
 /// Exclusive range of faces in the model.
 /// This represents the indexes in the model's face buffer.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct QuadRange {
     /// The start index of the face range.
     pub start: u32,
     /// The exclusive end index of the face range.
     pub end: u32,
+
+    // Per face AO data.
+    pub ao_direction: Box<[u8]>,
 }
 
 /// An IndexedModel which only references the faces in the model quad buffer.
