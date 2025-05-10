@@ -45,7 +45,7 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) ambient: vec3<f32>,
+    @location(3) ambient: f32,
     @location(4) instance_index: u32,
     @location(5) texture_id: u32,
 };
@@ -73,13 +73,7 @@ struct ModelQuad {
     ao: u32
 }
 
-//var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
-var<private> ambient_lerps: array<vec3<f32>, 4> = array<vec3<f32>, 4>(
-    vec3<f32>(1.0, 1.0, 1.0), // No occlusion
-    vec3<f32>(0.8, 0.8, 0.8), // Slight occlusion
-    vec3<f32>(0.5, 0.5, 0.5), // Moderate occlusion
-    vec3<f32>(0.2, 0.2, 0.2), // Full occlusion
-);
+var<private> ambient_lerps: vec4<f32> = vec4<f32>(1.0,0.7,0.5,0.15);
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -110,6 +104,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // Need to use this to get the correct AO value for the face.
     let corner_index = (model_quad.ao >> (3u + vertex_id * 2u)) & x_positive_bits(2u);
     let ao = (face.pos_ao >> (15u + corner_index * 2u)) & x_positive_bits(2u);
+    //let ao = (face.pos_ao >> (15u + vertex_id * 2u)) & x_positive_bits(2u);
 
 
     let x = face_x + vertex_position.x;

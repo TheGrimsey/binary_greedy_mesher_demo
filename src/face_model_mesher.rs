@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::{VoxelTexturingType, AO_CORNERS}, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockFlags, BlockRegistry}
+    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::{VoxelTexturingType, AO_CORNERS, DIRECTIONS}, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockFlags, BlockRegistry}
 };
 
 const DIRECTION_OFFSET: [IVec3; 6] = [
@@ -126,31 +126,17 @@ fn compute_voxel_ao(
 
     for axis in 0..6 {
         let ao = ao_filled_per_axis[axis];
-
-        let v1ao = ((ao >> 0) & 1) + ((ao >> 1) & 1) + ((ao >> 3) & 1);
-        let v2ao = ((ao >> 3) & 1) + ((ao >> 6) & 1) + ((ao >> 7) & 1);
-        let v3ao = ((ao >> 5) & 1) + ((ao >> 8) & 1) + ((ao >> 7) & 1);
-        let v4ao = ((ao >> 1) & 1) + ((ao >> 2) & 1) + ((ao >> 5) & 1);
         
-        let packed_ao = (v1ao << 0) | (v2ao << 2) | (v3ao << 4) | (v4ao << 6);
+        let v0ao = ((ao >> 3) & 1) + ((ao >> 1) & 1) + ((ao >> 0) & 1);
+        let v1ao = ((ao >> 5) & 1) + ((ao >> 1) & 1) + ((ao >> 2) & 1);
+        let v2ao = ((ao >> 5) & 1) + ((ao >> 7) & 1) + ((ao >> 8) & 1);
+        let v3ao = ((ao >> 3) & 1) + ((ao >> 7) & 1) + ((ao >> 6) & 1);
+        
+        
+        let packed_ao = (v0ao << 0) | (v1ao << 2) | (v2ao << 4) | (v3ao << 6);
 
         ao_per_face[axis] = packed_ao as u8;
     }
 
     ao_per_face
-}
-
-#[test]
-fn test_compute_voxel_ao() {
-    let base_pos = IVec3::ZERO;
-
-    for (i, &corner) in AO_CORNERS.iter().enumerate() {
-        // For each corner, check the 3 neighbor voxels that share it:
-        // They are offset -1 along each axis from the corner position.
-        let neighbor1 = base_pos + IVec3::new(corner[0] - 1, corner[1], corner[2]);
-        let neighbor2 = base_pos + IVec3::new(corner[0], corner[1], corner[2]);
-        let neighbor3 = base_pos + IVec3::new(corner[0], corner[1], corner[2] - 1);
-
-        println!("Corner {}: neighbor1: {:?}, neighbor2: {:?}, neighbor3: {:?}", i, neighbor1, neighbor2, neighbor3);
-    }
 }

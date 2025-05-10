@@ -11,6 +11,15 @@ pub const AO_CORNERS: [[i32; 3]; 8] = [
     [1, 1, 1], // 7
 ];
 
+const REMAP_CORNERS: [[u8; 4]; 6] = [
+    [0, 3, 1, 2], // +X
+    [0, 3, 1, 2], // -X
+    [0, 3, 1, 2], // +Y
+    [0, 3, 1, 2], // -Y
+    [0, 3, 1, 2], // +Z
+    [0, 3, 1, 2], // -Z
+];
+
 #[derive(ShaderType, Clone, Debug)]
 pub struct ModelQuad {
     pub positions: [Vec3; 4],
@@ -47,8 +56,12 @@ impl ModelQuad {
             let bit_b = if pos[b] >= 0.5 { 1 } else { 0 };
 
             let corner_index = (bit_b << 1) | bit_a; // 2 bits: bit_b = y, bit_a = x
-            self.ao |= (corner_index as u32) << (3 + i * 2); // Offset by 3 bits for face
+
+            let remapped_index = REMAP_CORNERS[face_normal as usize][corner_index as usize];
+
+            self.ao |= (remapped_index as u32) << (3 + i * 2); // Offset by 3 bits for face
         }
+        
 
         self
     }
@@ -90,6 +103,8 @@ fn closest_face_direction(normal: Vec3) -> u32 {
 
 #[test]
 fn test_ao_corners() {
+    use bevy::math::Vec3Swizzles;
+
     let model = ModelQuad {
         positions: [
             Vec3::new(0.0, 0.0, 1.0),
@@ -110,15 +125,55 @@ fn test_ao_corners() {
     println!("{:b}", model.ao);
     assert_eq!(model.ao & 0b111, 1); // Face normal is -X, so first 3 bits are 001
     
-    println!("0: {}", model.ao >> 3 & 0b11);
-    println!("1: {}", model.ao >> 5 & 0b11);
-    println!("2: {}", model.ao >> 7 & 0b11);
-    println!("3: {}", model.ao >> 9 & 0b11);
+    println!("0: {} ({:b})", model.positions[0].yz(), model.ao >> 3 & 0b11);
+    println!("1: {} ({:b})", model.positions[1].yz(), model.ao >> 5 & 0b11);
+    println!("2: {} ({:b})", model.positions[2].yz(), model.ao >> 7 & 0b11);
+    println!("3: {} ({:b})", model.positions[3].yz(), model.ao >> 9 & 0b11);
 
     assert_eq!(model.ao >> 3 & 0b11, 2);
     assert_eq!(model.ao >> 5 & 0b11, 3);
     assert_eq!(model.ao >> 7 & 0b11, 1);
     assert_eq!(model.ao >> 9 & 0b11, 0);
+
+    /*
+    * (0,0) == 0
+    * (0,1) == 2
+    * (1,0) == 1
+    * (1,1) == 3
+     */
+
+    
+    let model_y = ModelQuad {
+        positions: [
+            Vec3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.0, 1.0, 1.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            Vec3::new(1.0, 1.0, 0.0),
+        ],
+        uv: [
+            Vec2::new(1.0, 1.0),
+            Vec2::new(1.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 1.0),
+        ],
+        normal: Vec3::Y,
+        ao: 0,
+    }.with_ao_corner();
+
+    
+    println!("{:b}", model_y.ao);
+    assert_eq!(model_y.ao & 0b111, 2); // Face normal is +Y, so first 3 bits are 010
+    
+    println!("0: {} ({:b})", model_y.positions[0].xz(), model_y.ao >> 3 & 0b11);
+    println!("1: {} ({:b})", model_y.positions[1].xz(), model_y.ao >> 5 & 0b11);
+    println!("2: {} ({:b})", model_y.positions[2].xz(), model_y.ao >> 7 & 0b11);
+    println!("3: {} ({:b})", model_y.positions[3].xz(), model_y.ao >> 9 & 0b11);
+
+    assert_eq!(model_y.ao >> 3 & 0b11, 2);
+    assert_eq!(model_y.ao >> 5 & 0b11, 3);
+    assert_eq!(model_y.ao >> 7 & 0b11, 1);
+    assert_eq!(model_y.ao >> 9 & 0b11, 0);
+
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

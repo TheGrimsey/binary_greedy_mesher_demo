@@ -155,10 +155,10 @@ fn load_block_registry(
                 Direction::PosY,
                 vec![ModelQuad {
                     positions: [
+                        Vec3::new(0.0, 1.0, 0.0),
                         Vec3::new(0.0, 1.0, 1.0),
                         Vec3::new(1.0, 1.0, 1.0),
                         Vec3::new(1.0, 1.0, 0.0),
-                        Vec3::new(0.0, 1.0, 0.0),
                     ],
                     uv: [
                         Vec2::new(1.0, 1.0),
