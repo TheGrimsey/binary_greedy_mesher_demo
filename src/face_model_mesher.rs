@@ -5,15 +5,17 @@ use crate::{
 };
 
 const DIRECTION_OFFSET: [IVec3; 6] = [
-    IVec3::new(1, 0, 0),  // Right
-    IVec3::new(-1, 0, 0), // Left
-    IVec3::new(0, 1, 0),  // Up
-    IVec3::new(0, -1, 0), // Down
-    IVec3::new(0, 0, 1),  // Back
-    IVec3::new(0, 0, -1), // Forward
+    IVec3::X,  // Right
+    IVec3::NEG_X, // Left
+    IVec3::Y,  // Up
+    IVec3::NEG_Y, // Down
+    IVec3::Z,  // Back
+    IVec3::NEG_Z, // Forward
 ];
 
 pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &BlockRegistry, model_registry: &IndexedModelRegistry, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
+    let _span = info_span!("Meshing Chunk.").entered();
+
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
@@ -46,9 +48,9 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &Blo
                 let packed_pos = pos.x as u32 | (pos.y as u32) << 5 | (pos.z as u32) << 10;
 
                 // Add always visible faces
-                mesh.faces.extend((model.always_visible_faces.start..model.always_visible_faces.end).zip(&model.always_visible_faces.ao_direction).enumerate().map(|(i, (quad, face))| {
+                mesh.faces.extend((model.always_visible_faces.start..model.always_visible_faces.end).zip(&model.always_visible_faces.ao_direction).enumerate().map(|(i, (quad, direction))| {
                     Face {
-                        pos_ao: packed_pos | (ao[*face as usize] as u32) << 15,
+                        pos_ao: packed_pos | (ao[*direction as usize] as u32) << 15,
                         model_id: quad,
                         texture_id: match &textured_model.texture_ids {
                             VoxelTexturingType::SingleTexture(id) => *id,

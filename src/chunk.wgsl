@@ -104,8 +104,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     // Need to use this to get the correct AO value for the face.
     let corner_index = (model_quad.ao >> (3u + vertex_id * 2u)) & x_positive_bits(2u);
     let ao = (face.pos_ao >> (15u + corner_index * 2u)) & x_positive_bits(2u);
-    //let ao = (face.pos_ao >> (15u + vertex_id * 2u)) & x_positive_bits(2u);
-
 
     let x = face_x + vertex_position.x;
     let y = face_y + vertex_position.y;
