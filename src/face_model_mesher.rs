@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::{VoxelTexturingType, AO_CORNERS, DIRECTIONS}, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockFlags, BlockRegistry}
+    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::VoxelTexturingType, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockFlags, BlockRegistry}
 };
 
 const DIRECTION_OFFSET: [IVec3; 6] = [
