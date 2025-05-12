@@ -16,18 +16,8 @@ pub struct BlockStringIdentifier(pub Box<str>);
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(pub u16);
 
-bitflags::bitflags! {
-    /// Represents a set of flags.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct BlockFlags: u8 {
-        /// This is a solid block which appears in the mesh.
-        const SOLID = 1 << 0;
-        /// The is a transparent block which should appear in the transparent mesh.
-        const TRANSPARENT = 1 << 1;
-        /// The block has collision and should affect the collision mesh.
-        const COLLISION = 1 << 2;
-    }
-}
+pub const FLAG_SOLID: u8 = 1 << 0;
+pub const FLAG_TRANSPARENT: u8 = 1 << 1;
 
 #[derive(Default, Debug)]
 pub struct BlockRegistry {
@@ -36,18 +26,18 @@ pub struct BlockRegistry {
     /// Maps block id to block string identifier.
     pub block_id_to_string_identifier: Vec<BlockStringIdentifier>,
     /// Maps block id to block flags.
-    pub block_flags: Vec<BlockFlags>,
+    pub block_flags: Vec<u8>,
 
     pub block_model: Vec<TexturedBlockModel>,
 }
 impl BlockRegistry {
     #[inline]
     pub fn is_solid(&self, block_id: BlockId) -> bool {
-        self.block_flags[block_id.0 as usize].contains(BlockFlags::SOLID)
+        self.block_flags[block_id.0 as usize] & FLAG_SOLID != 0
     }
     #[inline]
-    pub fn has_flag(&self, block_id: BlockId, flag: BlockFlags) -> bool {
-        self.block_flags[block_id.0 as usize].contains(flag)
+    pub fn has_flag(&self, block_id: BlockId, flag: u8) -> bool {
+        self.block_flags[block_id.0 as usize] & flag != 0
     }
 
     pub fn add_block(
@@ -55,14 +45,11 @@ impl BlockRegistry {
         identifier: BlockStringIdentifier,
         block: Block,
     ) -> BlockId{
-        let mut flags = match block.visibility {
-            BlockVisibilty::Solid => BlockFlags::SOLID,
-            BlockVisibilty::Transparent => BlockFlags::TRANSPARENT,
-            BlockVisibilty::Invisible => BlockFlags::empty(),
+        let flags = match block.visibility {
+            BlockVisibilty::Solid => FLAG_SOLID,
+            BlockVisibilty::Transparent => FLAG_TRANSPARENT,
+            BlockVisibilty::Invisible => 0,
         };
-        if block.collision {
-            flags |= BlockFlags::COLLISION;
-        }
 
         let block_id = BlockId(self.block_id_to_string_identifier.len() as u16);
         
@@ -92,14 +79,12 @@ pub enum BlockVisibilty {
 
 pub struct Block {
     pub visibility: BlockVisibilty,
-    pub collision: bool,
     pub model: TexturedBlockModel,
 }
 impl Default for Block {
     fn default() -> Self {
         Self {
             visibility: BlockVisibilty::Solid,
-            collision: true,
             model: TexturedBlockModel {
                 model: ModelId(0),
                 texture_ids: VoxelTexturingType::SingleTexture(0),

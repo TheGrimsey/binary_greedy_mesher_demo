@@ -9,7 +9,7 @@ use bevy::{
 };
 use indexmap::IndexSet;
 
-use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelRegistry, DIRECTIONS}, IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockFlags, BlockRegistryResource}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
+use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelRegistry, DIRECTIONS}, IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockRegistryResource, FLAG_SOLID, FLAG_TRANSPARENT}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
 
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
@@ -439,8 +439,8 @@ pub fn start_mesh_tasks(
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
-                    opaque: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, BlockFlags::SOLID, true),
-                    transparent: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, BlockFlags::TRANSPARENT, true)
+                    opaque: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, FLAG_SOLID, true),
+                    transparent: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, FLAG_TRANSPARENT, true)
                 }
             }),
         };

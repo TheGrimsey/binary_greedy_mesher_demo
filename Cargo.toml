@@ -12,7 +12,6 @@ rendering = ["bevy/bevy_pbr", "bevy/bevy_asset"]
 
 [dependencies]
 bevy = { version = "0.15", default-features = false, features = ["multi_threaded"]}
-bitflags = "2.8"
 bracket-noise = "0.8.7"
 indexmap = "2.7.1"
 

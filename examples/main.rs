@@ -196,7 +196,7 @@ fn load_block_registry(
     let mut block_registry = BlockRegistry::default();
     let _ = block_registry.add_block(
         BlockStringIdentifier(Box::from("air")),
-        Block { visibility: BlockVisibilty::Invisible, collision: false, ..default() },
+        Block { visibility: BlockVisibilty::Invisible, ..default() },
     );
     let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), Block { visibility: BlockVisibilty::Solid, ..default() });
     let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), Block { visibility: BlockVisibilty::Solid, ..default() });

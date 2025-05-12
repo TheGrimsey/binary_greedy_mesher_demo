@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::VoxelTexturingType, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockFlags, BlockRegistry}
+    chunk_mesh::{ChunkMesh, Face}, chunks_refs::ChunksRefs, constants::{ADJACENT_AO_DIRS, CHUNK_SIZE}, lod::Lod, models::{model::VoxelTexturingType, IndexedModelRegistry}, utils::generate_indices, voxel::{BlockRegistry}
 };
 
 const DIRECTION_OFFSET: [IVec3; 6] = [
@@ -13,7 +13,7 @@ const DIRECTION_OFFSET: [IVec3; 6] = [
     IVec3::NEG_Z, // Forward
 ];
 
-pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &BlockRegistry, model_registry: &IndexedModelRegistry, flag_to_build: BlockFlags, calculate_ao: bool) -> Option<ChunkMesh> {
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &BlockRegistry, model_registry: &IndexedModelRegistry, flag_to_build: u8, calculate_ao: bool) -> Option<ChunkMesh> {
     let _span = info_span!("Meshing Chunk.").entered();
 
     // early exit, if all faces are culled
