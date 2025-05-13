@@ -36,11 +36,22 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &Blo
                     continue;
                 }
 
+                let mut visible_faces = 0;
+                for (i, &offset) in DIRECTION_OFFSET.iter().enumerate() {
+                    let neighbor_pos = pos + offset;
+                    let neighbor_block = chunks_refs.get_block(neighbor_pos);
+                    if !block_registry.has_flag(neighbor_block.block_type, flag_to_build) {
+                        visible_faces |= 1 << i;
+                    }
+                }
+
                 let textured_model = &block_registry.block_model[voxel.block_type.0 as usize];
                 let model = &model_registry.models[textured_model.model.0 as usize];
 
                 let ao = if calculate_ao {
-                    compute_voxel_ao(chunks_refs, pos, block_registry)
+                    let ao_directions = model.always_required_face_directions | visible_faces;
+
+                    compute_voxel_ao(chunks_refs, pos, block_registry, ao_directions)
                 } else {
                     [0; 6]
                 };
@@ -59,20 +70,22 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod, block_registry: &Blo
                     }
                 }));
 
-                for (i, (&offset, quad_range)) in DIRECTION_OFFSET.iter().zip(&model.occluded_faces).enumerate() {
-                    // Check if the neighbor in the direction is solid
-                    if !block_registry.is_solid(chunks_refs.get_block(pos + offset).block_type) {
-                        mesh.faces.extend((quad_range.start..quad_range.end).zip(&quad_range.ao_direction).enumerate().map(|(j, (quad, face))| {
-                            Face {
-                                pos_ao: packed_pos | (ao[*face as usize] as u32) << 15,
-                                model_id: quad,
-                                texture_id: match &textured_model.texture_ids {
-                                    VoxelTexturingType::SingleTexture(id) => *id,
-                                    VoxelTexturingType::MultiTexture { all_faces } => all_faces[i].get(j).copied().unwrap_or(0),
-                                },
-                            }
-                        }));
-                    }
+                while visible_faces != 0 {
+                    let i = visible_faces.trailing_zeros() as usize;
+                    visible_faces &= !(1 << i);
+
+                    let quad_range = &model.occluded_faces[i];
+
+                    mesh.faces.extend((quad_range.start..quad_range.end).zip(&quad_range.ao_direction).enumerate().map(|(j, (quad, face))| {
+                        Face {
+                            pos_ao: packed_pos | (ao[*face as usize] as u32) << 15,
+                            model_id: quad,
+                            texture_id: match &textured_model.texture_ids {
+                                VoxelTexturingType::SingleTexture(id) => *id,
+                                VoxelTexturingType::MultiTexture { all_faces } => all_faces[i].get(j).copied().unwrap_or(0),
+                            },
+                        }
+                    }));
                 }
             }
         }
@@ -91,13 +104,23 @@ fn compute_voxel_ao(
     chunks: &ChunksRefs,
     voxel_pos: IVec3,
     registry: &BlockRegistry,
+    directions: u8,
 ) -> [u8; 6] {
+    if directions == 0 {
+        return [0; 6];
+    }
+
     // Step 1. Pack filled blocks into a u32. 1 is filled, 0 is empty.
     // We use these to count the number of filled neighbors for each corner.
-
     let mut ao_filled_per_axis = [0u16; 6];
 
+
     for (i, axis_val) in ao_filled_per_axis.iter_mut().enumerate() {
+        // We only need to calculate AO for the faces that are visible.
+        if (directions & (1 << i)) == 0 {
+            continue;
+        }
+
         let mut ao_index = 0u16;
 
         for (ao_i, ao_offset) in ADJACENT_AO_DIRS.iter().enumerate() {

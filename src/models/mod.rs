@@ -25,6 +25,8 @@ pub struct IndexedModel {
 
     /// Faces that are visible when the model is not occluded per direction.
     pub occluded_faces: [QuadRange; 6],
+
+    pub always_required_face_directions: u8,
 }
 
 /// The model registry.

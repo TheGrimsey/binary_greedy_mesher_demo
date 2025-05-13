@@ -77,12 +77,15 @@ fn initialize_global_material_buffers(
         let start_index = model_quads.len() as u32;
         model_quads.extend(model.unculled_quads.iter().cloned());
         let end_index = model_quads.len() as u32;
+
+        let unculled_ao_directions: Box<[u8]> = model.unculled_quads.iter().map(|quad| (quad.ao & 0b111) as u8).collect();
     
         let mut indexed_model = IndexedModel {
+            always_required_face_directions: unculled_ao_directions.iter().fold(0, |acc, &dir| acc | (1 << dir)),
             always_visible_faces: QuadRange { 
                 start: start_index,
                 end: end_index,
-                ao_direction: model.unculled_quads.iter().map(|quad| (quad.ao & 0b111) as u8).collect()
+                ao_direction: unculled_ao_directions,
             },
             occluded_faces: std::array::from_fn(|_i| QuadRange { start: 0, end: 0, ao_direction: Box::default() }),
         };
