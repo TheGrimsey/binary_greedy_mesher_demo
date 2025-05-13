@@ -44,12 +44,12 @@ impl BlockRegistry {
         &mut self,
         identifier: BlockStringIdentifier,
         block: Block,
-    ) -> BlockId{
+    ) -> BlockId {
         let flags = match block.visibility {
             BlockVisibilty::Solid => FLAG_SOLID,
             BlockVisibilty::Transparent => FLAG_TRANSPARENT,
             BlockVisibilty::Invisible => 0,
-        };
+        } | block.flags;
 
         let block_id = BlockId(self.block_id_to_string_identifier.len() as u16);
         
@@ -80,6 +80,10 @@ pub enum BlockVisibilty {
 pub struct Block {
     pub visibility: BlockVisibilty,
     pub model: TexturedBlockModel,
+    /// The flags for this block.
+    /// 
+    /// First 2 bits are reserved for solid and transparent.
+    pub flags: u8,
 }
 impl Default for Block {
     fn default() -> Self {
@@ -89,6 +93,7 @@ impl Default for Block {
                 model: ModelId(0),
                 texture_ids: VoxelTexturingType::SingleTexture(0),
             },
+            flags: 0,
         }
     }
 }
