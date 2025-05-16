@@ -19,7 +19,7 @@ pub struct BlockId(pub u16);
 pub const FLAG_SOLID: u8 = 1 << 0;
 pub const FLAG_TRANSPARENT: u8 = 1 << 1;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct BlockRegistry {
     pub block_string_identifier_to_id: HashMap<BlockStringIdentifier, BlockId>,
 
