@@ -56,10 +56,16 @@ impl Plugin for RenderingPlugin {
     }
 }
 
+/// All the textures used by blocks in the world.
+/// Must be initialized before any chunks are loaded. 
+#[derive(Resource)]
+pub struct TextureBuffer(pub Arc<[Handle<Image>]>);
+
+
 #[derive(Resource)]
 pub struct SharedMaterialBuffers {
-    pub model_buffer: Handle<ShaderStorageBuffer>,
-} 
+    pub model_buffer: Handle<ShaderStorageBuffer>
+}
 
 fn initialize_global_material_buffers(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
@@ -492,6 +498,7 @@ pub fn join_mesh(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ChunkMaterial>>,
     shared_material_buffers: Res<SharedMaterialBuffers>,
+    texture_buffer: Res<TextureBuffer>,
 ) {
     let MeshingPipeline {
         mesh_tasks,
@@ -555,7 +562,7 @@ pub fn join_mesh(
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Opaque,
-                        textures: Arc::new([]),
+                        textures: texture_buffer.0.clone(),
                     })),
                     ChunkEntityType::Opaque,
                     Name::new("Opaque")
@@ -583,7 +590,7 @@ pub fn join_mesh(
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Premultiplied,
-                        textures: Arc::new([]),
+                        textures: texture_buffer.0.clone(),
                     })),
                     ChunkEntityType::Transparent,
                     Name::new("Transparent")

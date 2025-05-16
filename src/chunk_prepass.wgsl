@@ -69,9 +69,11 @@ struct MyVertexOutput {
 fn vertex(vertex: Vertex) -> MyVertexOutput {
     var out: MyVertexOutput;
 
+    let first_vertex = mesh[vertex.instance_index].first_vertex_index;
+    let vertex_index = vertex.index - first_vertex;
     
-    let face_id = vertex.index >> 2;
-    let vertex_id = vertex.index & 3u;
+    let face_id = vertex_index >> 2;
+    let vertex_id = vertex_index & 3u;
 
     let face = face_buffer[face_id];
     let model_quad = model_buffer[face.model_id];
