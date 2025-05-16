@@ -4,7 +4,7 @@
     prepass_io::{FragmentOutput},
     skinning,
     morph,
-    mesh_view_bindings::{view, previous_view_proj},
+    mesh_view_bindings::{view, previous_view_proj, mesh},
     view_transformations::position_world_to_clip,
 }
 
