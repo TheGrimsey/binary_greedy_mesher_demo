@@ -58,7 +58,7 @@ impl Plugin for RenderingPlugin {
 
 /// All the textures used by blocks in the world.
 /// Must be initialized before any chunks are loaded. 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct TextureBuffer(pub Arc<[Handle<Image>]>);
 
 
