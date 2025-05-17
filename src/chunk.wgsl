@@ -121,6 +121,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.world_position = world_position;
     
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
+    out.texture_id = face.texture_id;
 
     out.uv = vertex_uv;
 
