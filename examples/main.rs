@@ -15,7 +15,7 @@ use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
     chunk::{ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D}, constants::CHUNK_SIZE3, diagnostics::VoxelDiagnosticsPlugin, models::model::{BlockModel, Direction, ModelQuad, ModelRegistry}, rendering::{
         ChunkMaterial,
-        RenderingPlugin,
+        RenderingPlugin, TextureBuffer,
     }, scanner::{DataScanner, MeshScanner, Scanner}, utils::{index_to_ivec3, world_to_chunk}, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
 };
 
@@ -256,8 +256,8 @@ pub fn setup(
     // uncomment for scanner at origin position
     commands.spawn((
         Transform::default(),
-        Scanner::<DataScanner>::new(2, Some(5)),
-        Scanner::<MeshScanner>::new(0, Some(0)), 
+        Scanner::<DataScanner>::new(5, Some(5)),
+        Scanner::<MeshScanner>::new(5, Some(5)), 
     ));
 
     commands
@@ -281,6 +281,8 @@ pub fn setup(
     commands.insert_resource(ChunkGenerator {
         generate: Arc::new(generate)
     });
+
+    commands.insert_resource(TextureBuffer::default())
 }
 
 
