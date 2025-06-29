@@ -1,20 +1,52 @@
 use std::{num::NonZero, sync::Arc};
 
 use bevy::{
-    asset::{load_internal_asset, RenderAssetUsages}, ecs::system::{lifetimeless::SRes, SystemParamItem}, pbr::{MaterialPipeline, MaterialPipelineKey}, prelude::*, render::{
-        mesh::MeshVertexBufferLayoutRef, render_asset::RenderAssets, render_resource::{
-            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer}, encase::UniformBuffer, AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntry, BufferInitDescriptor, BufferUsages, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType, UnpreparedBindGroup
-        }, renderer::RenderDevice, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::{FallbackImage, GpuImage}
-    }, tasks::{block_on, poll_once, AsyncComputeTaskPool, Task}, utils::HashMap
+    asset::{RenderAssetUsages, load_internal_asset},
+    ecs::system::{SystemParamItem, lifetimeless::SRes},
+    pbr::{MaterialPipeline, MaterialPipelineKey},
+    prelude::*,
+    render::{
+        mesh::MeshVertexBufferLayoutRef,
+        render_asset::RenderAssets,
+        render_resource::{
+            AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout,
+            BindGroupLayoutEntries, BindGroupLayoutEntry, BufferInitDescriptor, BufferUsages,
+            PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType,
+            ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType,
+            UnpreparedBindGroup,
+            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer},
+            encase::UniformBuffer,
+        },
+        renderer::RenderDevice,
+        storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
+        texture::{FallbackImage, GpuImage},
+    },
+    tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
+    utils::HashMap,
 };
 use indexmap::IndexSet;
 
-use crate::{chunk_mesh::{ChunkMesh, ATTRIBUTE_VOXEL}, chunks_refs::ChunksRefs, constants::ADJACENT_CHUNK_DIRECTIONS, events::ChunkModified, models::{model::{ModelRegistry, DIRECTIONS}, IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange}, scanner::{ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, GlobalScannerDesiredChunks, MeshScanner, Scanner}, voxel::{BlockRegistryResource, FLAG_SOLID, FLAG_TRANSPARENT}, voxel_engine::{join_data, MeshingMethod, VoxelEngine}};
-
+use crate::{
+    chunk_mesh::{ATTRIBUTE_VOXEL, ChunkMesh},
+    chunks_refs::ChunksRefs,
+    constants::ADJACENT_CHUNK_DIRECTIONS,
+    events::ChunkModified,
+    models::{
+        IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange,
+        model::{DIRECTIONS, ModelRegistry},
+    },
+    scanner::{
+        ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos,
+        GlobalScannerDesiredChunks, MeshScanner, Scanner,
+    },
+    voxel::{BlockRegistryResource, FLAG_SOLID, FLAG_TRANSPARENT},
+    voxel_engine::{MeshingMethod, VoxelEngine, join_data},
+};
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(138165523578389129966343978676199385893);
-pub const CHUNK_PREPASS_HANDLE: Handle<Shader> = Handle::weak_from_u128(38749848998489157831713083983198931828);
+pub const CHUNK_PREPASS_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(38749848998489157831713083983198931828);
 
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
@@ -30,16 +62,12 @@ impl Plugin for RenderingPlugin {
         app.add_plugins(MaterialPlugin::<ChunkMaterialWireframe>::default());
         app.insert_resource(ChunkMaterialWireframeMode::Off);
 
-        app.init_resource::<MeshingPipeline>().init_resource::<ChunkMeshEntities>();
+        app.init_resource::<MeshingPipeline>()
+            .init_resource::<ChunkMeshEntities>();
 
         app.add_systems(PostStartup, initialize_global_material_buffers);
 
-        load_internal_asset!(
-            app,
-            CHUNK_SHADER_HANDLE,
-            "chunk.wgsl",
-            Shader::from_wgsl
-        );
+        load_internal_asset!(app, CHUNK_SHADER_HANDLE, "chunk.wgsl", Shader::from_wgsl);
 
         load_internal_asset!(
             app,
@@ -48,29 +76,27 @@ impl Plugin for RenderingPlugin {
             Shader::from_wgsl
         );
 
-        app.add_systems(PostUpdate, (
-            join_mesh,
-            unload_mesh,
-            start_mesh_tasks.after(join_data),
-        ).chain());
+        app.add_systems(
+            PostUpdate,
+            (join_mesh, unload_mesh, start_mesh_tasks.after(join_data)).chain(),
+        );
     }
 }
 
 /// All the textures used by blocks in the world.
-/// Must be initialized before any chunks are loaded. 
+/// Must be initialized before any chunks are loaded.
 #[derive(Resource, Default)]
 pub struct TextureBuffer(pub Arc<[Handle<Image>]>);
 
-
 #[derive(Resource)]
 pub struct SharedMaterialBuffers {
-    pub model_buffer: Handle<ShaderStorageBuffer>
+    pub model_buffer: Handle<ShaderStorageBuffer>,
 }
 
 fn initialize_global_material_buffers(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut commands: Commands,
-    mut model_registry: ResMut<ModelRegistry>
+    mut model_registry: ResMut<ModelRegistry>,
 ) {
     // TODO: Create IndexedModelRegistryResource and add it to the shader storage buffer.
     // 1. Iterate over each model in the registry.
@@ -84,16 +110,26 @@ fn initialize_global_material_buffers(
         model_quads.extend(model.unculled_quads.iter().cloned());
         let end_index = model_quads.len() as u32;
 
-        let unculled_ao_directions: Box<[u8]> = model.unculled_quads.iter().map(|quad| (quad.ao & 0b111) as u8).collect();
-    
+        let unculled_ao_directions: Box<[u8]> = model
+            .unculled_quads
+            .iter()
+            .map(|quad| (quad.ao & 0b111) as u8)
+            .collect();
+
         let mut indexed_model = IndexedModel {
-            always_required_face_directions: unculled_ao_directions.iter().fold(0, |acc, &dir| acc | (1 << dir)),
-            always_visible_faces: QuadRange { 
+            always_required_face_directions: unculled_ao_directions
+                .iter()
+                .fold(0, |acc, &dir| acc | (1 << dir)),
+            always_visible_faces: QuadRange {
                 start: start_index,
                 end: end_index,
                 ao_direction: unculled_ao_directions,
             },
-            occluded_faces: std::array::from_fn(|_i| QuadRange { start: 0, end: 0, ao_direction: Box::default() }),
+            occluded_faces: std::array::from_fn(|_i| QuadRange {
+                start: 0,
+                end: 0,
+                ao_direction: Box::default(),
+            }),
         };
 
         for (quad_range, direction) in indexed_model.occluded_faces.iter_mut().zip(DIRECTIONS) {
@@ -102,25 +138,26 @@ fn initialize_global_material_buffers(
                 model_quads.extend(quads.iter().cloned());
                 quad_range.end = model_quads.len() as u32;
 
-                quad_range.ao_direction = quads.iter().map(|quad| (quad.ao & 0b111) as u8).collect();
+                quad_range.ao_direction =
+                    quads.iter().map(|quad| (quad.ao & 0b111) as u8).collect();
             }
         }
 
         indexed_models.push(indexed_model);
     }
 
-    commands.insert_resource(IndexedModelRegistryResource(Arc::new(IndexedModelRegistry {
-        models: indexed_models,
-    })));
+    commands.insert_resource(IndexedModelRegistryResource(Arc::new(
+        IndexedModelRegistry {
+            models: indexed_models,
+        },
+    )));
 
     let mut model_buffer = ShaderStorageBuffer::from(model_quads);
     model_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
 
     let model_buffer = buffers.add(model_buffer);
-    
-    commands.insert_resource(SharedMaterialBuffers {
-        model_buffer,
-    });
+
+    commands.insert_resource(SharedMaterialBuffers { model_buffer });
 }
 
 #[derive(Component)]
@@ -129,7 +166,8 @@ pub enum ChunkEntityType {
     Transparent,
 }
 
-const MAX_TEXTURE_COUNT: usize = 256; // There's no true texture arrays :( WebGPU!!!! Very annoying :(
+const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGPU!!!! Very annoying :(
+// Mac only supports 128.
 
 #[derive(Reflect, ShaderType, Debug, Clone, Copy)]
 pub struct MaterialProperties {
@@ -169,7 +207,9 @@ impl Material for ChunkMaterial {
         layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.0.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
+        let vertex_layout = layout
+            .0
+            .get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())
     }
@@ -185,67 +225,78 @@ impl Material for ChunkMaterial {
 impl AsBindGroup for ChunkMaterial {
     type Data = ();
 
-    type Param = (SRes<RenderAssets<GpuShaderStorageBuffer>>, SRes<RenderAssets<GpuImage>>, SRes<FallbackImage>);
+    type Param = (
+        SRes<RenderAssets<GpuShaderStorageBuffer>>,
+        SRes<RenderAssets<GpuImage>>,
+        SRes<FallbackImage>,
+    );
 
     fn as_bind_group(
-            &self,
-            layout: &BindGroupLayout,
-            render_device: &RenderDevice,
-            (storage_buffers, image_assets, fallback_image): &mut SystemParamItem<'_, '_, Self::Param>,
-        ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
-            // retrieve the render resources from handles
-            
-            let mut properties_buffer = UniformBuffer::new(Vec::new());
-            properties_buffer.write(&self.properties).unwrap();
-            
-            let properties_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-                label: None,
-                contents: properties_buffer.as_ref(),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            });
+        &self,
+        layout: &BindGroupLayout,
+        render_device: &RenderDevice,
+        (storage_buffers, image_assets, fallback_image): &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
+        // retrieve the render resources from handles
 
-            let Some(model_buffer) = storage_buffers.get(&self.model_buffer) else {
-                return Err(AsBindGroupError::RetryNextUpdate);
-            };
+        let mut properties_buffer = UniformBuffer::new(Vec::new());
+        properties_buffer.write(&self.properties).unwrap();
 
-            let model_buffer = model_buffer.buffer.as_entire_buffer_binding();
+        let properties_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
+            contents: properties_buffer.as_ref(),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
 
-            let Some(face_buffer) = storage_buffers.get(&self.face_buffer) else {
-                return Err(AsBindGroupError::RetryNextUpdate);
-            };
-            let face_buffer = face_buffer.buffer.as_entire_buffer_binding();
-            
-            let mut images = vec![];
-            for handle in self.textures.iter().take(MAX_TEXTURE_COUNT) {
-                match image_assets.get(handle) {
-                    Some(image) => images.push(image),
-                    None => return Err(AsBindGroupError::RetryNextUpdate),
-                }
+        let Some(model_buffer) = storage_buffers.get(&self.model_buffer) else {
+            return Err(AsBindGroupError::RetryNextUpdate);
+        };
+
+        let model_buffer = model_buffer.buffer.as_entire_buffer_binding();
+
+        let Some(face_buffer) = storage_buffers.get(&self.face_buffer) else {
+            return Err(AsBindGroupError::RetryNextUpdate);
+        };
+        let face_buffer = face_buffer.buffer.as_entire_buffer_binding();
+
+        let mut images = vec![];
+        for handle in self.textures.iter().take(MAX_TEXTURE_COUNT) {
+            match image_assets.get(handle) {
+                Some(image) => images.push(image),
+                None => return Err(AsBindGroupError::RetryNextUpdate),
             }
+        }
 
-            let fallback_image = &fallback_image.d2;
+        let fallback_image = &fallback_image.d2;
 
-            let mut textures = std::iter::repeat_n(&fallback_image.texture_view, MAX_TEXTURE_COUNT).map(|texture| &**texture).collect::<Vec<_>>();
+        let mut textures = std::iter::repeat_n(&fallback_image.texture_view, MAX_TEXTURE_COUNT)
+            .map(|texture| &**texture)
+            .collect::<Vec<_>>();
 
-            // fill in up to the first `MAX_TEXTURE_COUNT` textures and samplers to the arrays
-            for (id, image) in images.into_iter().enumerate() {
-                textures[id] = &*image.texture_view;
-            }
+        // fill in up to the first `MAX_TEXTURE_COUNT` textures and samplers to the arrays
+        for (id, image) in images.into_iter().enumerate() {
+            textures[id] = &*image.texture_view;
+        }
 
-            let bind_group = render_device.create_bind_group(
-                "chunk_material_bind_group",
-                layout,
-                &BindGroupEntries::sequential((properties_buffer.as_entire_buffer_binding(), model_buffer, face_buffer, &textures[..], &fallback_image.sampler)),
-            );
+        let bind_group = render_device.create_bind_group(
+            "chunk_material_bind_group",
+            layout,
+            &BindGroupEntries::sequential((
+                properties_buffer.as_entire_buffer_binding(),
+                model_buffer,
+                face_buffer,
+                &textures[..],
+                &fallback_image.sampler,
+            )),
+        );
 
-            Ok(PreparedBindGroup {
-                bindings: vec![],
-                bind_group,
-                data: (),
-            })
+        Ok(PreparedBindGroup {
+            bindings: vec![],
+            bind_group,
+            data: (),
+        })
     }
 
-    
     fn unprepared_bind_group(
         &self,
         _layout: &BindGroupLayout,
@@ -316,11 +367,11 @@ pub struct ChunkMaterialWireframe {
     pub perceptual_roughness: f32,
     #[uniform(0)]
     pub metallic: f32,
-    
-    #[storage(1,read_only)]
+
+    #[storage(1, read_only)]
     pub block_colors: Handle<ShaderStorageBuffer>,
-    
-    #[storage(2,read_only)]
+
+    #[storage(2, read_only)]
     pub block_emissive: Handle<ShaderStorageBuffer>,
 }
 
@@ -342,7 +393,9 @@ impl Material for ChunkMaterialWireframe {
         layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.0.get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
+        let vertex_layout = layout
+            .0
+            .get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
         descriptor.primitive.polygon_mode = PolygonMode::Line;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())
@@ -385,7 +438,7 @@ pub fn start_mesh_tasks(
     model_registry: Res<IndexedModelRegistryResource>,
     mut chunk_gained_mesh_relevance: EventReader<ChunkGainedScannerRelevance<MeshScanner>>,
     mut chunk_modified: EventReader<ChunkModified>,
-    global_mesh_scanner_chunks: Res<GlobalScannerDesiredChunks<MeshScanner>>
+    global_mesh_scanner_chunks: Res<GlobalScannerDesiredChunks<MeshScanner>>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -395,20 +448,27 @@ pub fn start_mesh_tasks(
         meshing_method,
         ..
     } = voxel_engine.as_ref();
-    
+
     // Order by FURTHEST distance to any scanner.
     // Closest chunks are at the end.
     // We do this so we can pop from the end of the list.
     if !chunk_gained_mesh_relevance.is_empty() || !chunk_modified.is_empty() {
-        mesh_pipeline.load_mesh_queue.extend(chunk_gained_mesh_relevance.read().map(|e| e.chunk));
+        mesh_pipeline
+            .load_mesh_queue
+            .extend(chunk_gained_mesh_relevance.read().map(|e| e.chunk));
 
-        mesh_pipeline.load_mesh_queue.extend(chunk_modified.read().map(|e| e.0).filter(|chunk| global_mesh_scanner_chunks.chunks.contains(chunk)));
+        mesh_pipeline.load_mesh_queue.extend(
+            chunk_modified
+                .read()
+                .map(|e| e.0)
+                .filter(|chunk| global_mesh_scanner_chunks.chunks.contains(chunk)),
+        );
 
         // TODO: With many chunks in queue, this is SLOW.
         let _span = info_span!("Sorting meshing queue by distance to scanners").entered();
         mesh_pipeline.load_mesh_queue.sort_by_cached_key(|pos| {
             let mut closest_distance = i32::MAX;
-            
+
             for scan_pos in scanners.iter() {
                 let distance = pos.distance_squared(scan_pos.0);
                 if distance < closest_distance {
@@ -418,7 +478,6 @@ pub fn start_mesh_tasks(
 
             -closest_distance
         });
-
     }
 
     let mut i = mesh_pipeline.load_mesh_queue.len();
@@ -428,9 +487,9 @@ pub fn start_mesh_tasks(
         let world_pos = mesh_pipeline.load_mesh_queue[i];
 
         // We can only generate a mesh if all neighbors are available.
-        let all_neighbors_available = ADJACENT_CHUNK_DIRECTIONS.iter().all(|&dir| {
-            world_data.contains_key(&(world_pos + dir))
-        });
+        let all_neighbors_available = ADJACENT_CHUNK_DIRECTIONS
+            .iter()
+            .all(|&dir| world_data.contains_key(&(world_pos + dir)));
 
         if !all_neighbors_available {
             continue;
@@ -440,16 +499,30 @@ pub fn start_mesh_tasks(
         let Some(chunks_refs) = ChunksRefs::try_new(world_data, world_pos) else {
             continue;
         };
-        
+
         let llod = *lod;
         let block_registry = block_registry.0.clone();
         let model_registry = model_registry.0.clone();
-        
+
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
                 MeshTask {
-                    opaque: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, FLAG_SOLID, true),
-                    transparent: crate::face_model_mesher::build_chunk_mesh(&chunks_refs, llod, &block_registry, &model_registry, FLAG_TRANSPARENT, true)
+                    opaque: crate::face_model_mesher::build_chunk_mesh(
+                        &chunks_refs,
+                        llod,
+                        &block_registry,
+                        &model_registry,
+                        FLAG_SOLID,
+                        true,
+                    ),
+                    transparent: crate::face_model_mesher::build_chunk_mesh(
+                        &chunks_refs,
+                        llod,
+                        &block_registry,
+                        &model_registry,
+                        FLAG_TRANSPARENT,
+                        true,
+                    ),
                 }
             }),
         };
@@ -463,7 +536,7 @@ pub fn unload_mesh(
     mut commands: Commands,
     mut mesh_pipeline: ResMut<MeshingPipeline>,
     mut chunk_mesh_entities: ResMut<ChunkMeshEntities>,
-    mut chunk_lost_mesh_relevance: EventReader<ChunkLostScannerRelevance<MeshScanner>>
+    mut chunk_lost_mesh_relevance: EventReader<ChunkLostScannerRelevance<MeshScanner>>,
 ) {
     let MeshingPipeline {
         unload_mesh_queue,
@@ -480,7 +553,7 @@ pub fn unload_mesh(
         };
 
         vertex_diagnostic.remove(&chunk_pos);
-        
+
         if let Some(entity_commands) = commands.get_entity(chunk_id) {
             entity_commands.despawn_recursive();
         }
@@ -506,7 +579,6 @@ pub fn join_mesh(
         ..
     } = mesh_pipeline.as_mut();
 
-    
     let properties = MaterialProperties {
         reflectance: 0.5,
         perceptual_roughness: 1.0,
@@ -524,7 +596,7 @@ pub fn join_mesh(
             *task_option = Some(task);
             continue;
         };
-        
+
         // Despawn the old chunk entity if it exists.
         // Checking before we check the mesh because we may not get a mesh.
         if let Some(entity) = chunk_mesh_entities.0.remove(world_pos) {
@@ -534,17 +606,16 @@ pub fn join_mesh(
         let mut total_vertex_count = 0;
         if chunk_mesh_task.opaque.is_some() || chunk_mesh_task.transparent.is_some() {
             // spawn chunk entity
-            let mut chunk_entity = commands
-                .spawn((
-                    Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
-                    Visibility::Inherited,
-                    Name::new(format!("Chunk: {:?}", world_pos)),
-                ));
+            let mut chunk_entity = commands.spawn((
+                Transform::from_translation(world_pos.as_vec3() * Vec3::splat(32.0)),
+                Visibility::Inherited,
+                Name::new(format!("Chunk: {:?}", world_pos)),
+            ));
             chunk_mesh_entities.0.insert(*world_pos, chunk_entity.id());
 
             if let Some(mesh) = chunk_mesh_task.opaque.take() {
                 total_vertex_count += mesh.faces.len() * 4;
-                
+
                 let aabb = mesh.calculate_aabb();
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
@@ -553,7 +624,7 @@ pub fn join_mesh(
                 face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
 
                 let face_buffer = shader_storage_buffers.add(face_buffer);
-                
+
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
@@ -565,7 +636,7 @@ pub fn join_mesh(
                         textures: texture_buffer.0.clone(),
                     })),
                     ChunkEntityType::Opaque,
-                    Name::new("Opaque")
+                    Name::new("Opaque"),
                 ));
             }
 
@@ -573,7 +644,7 @@ pub fn join_mesh(
                 total_vertex_count += mesh.faces.len() * 4;
 
                 let aabb = mesh.calculate_aabb();
-                
+
                 let (bevy_mesh, faces) = mesh.to_bevy_mesh();
                 let mesh_handle = meshes.add(bevy_mesh);
 
@@ -581,7 +652,7 @@ pub fn join_mesh(
                 face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
 
                 let face_buffer = shader_storage_buffers.add(face_buffer);
-                
+
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
@@ -593,7 +664,7 @@ pub fn join_mesh(
                         textures: texture_buffer.0.clone(),
                     })),
                     ChunkEntityType::Transparent,
-                    Name::new("Transparent")
+                    Name::new("Transparent"),
                 ));
             }
         }
