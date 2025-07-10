@@ -273,9 +273,17 @@ impl AsBindGroup for ChunkMaterial {
             .map(|texture| &**texture)
             .collect::<Vec<_>>();
 
+        let mut fallback_sampler = &fallback_image.sampler;
+
+        // Use sampler settings of the first image if available.
+        if let Some(first_image) = images.first() {
+            fallback_sampler = &first_image.sampler;
+        }
+
         // fill in up to the first `MAX_TEXTURE_COUNT` textures and samplers to the arrays
         for (id, image) in images.into_iter().enumerate() {
             textures[id] = &*image.texture_view;
+            fallback_sampler = &image.sampler;
         }
 
         let bind_group = render_device.create_bind_group(
@@ -286,7 +294,7 @@ impl AsBindGroup for ChunkMaterial {
                 model_buffer,
                 face_buffer,
                 &textures[..],
-                &fallback_image.sampler,
+                fallback_sampler,
             )),
         );
 
