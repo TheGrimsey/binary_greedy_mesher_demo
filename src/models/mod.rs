@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy::ecs::system::Resource;
+use bevy::ecs::resource::Resource;
 
 pub mod model;
 

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use bevy::{
-    math::{ivec3, IVec3},
-    utils::HashMap,
+    math::{IVec3, ivec3},
+    platform::collections::HashMap,
 };
 /*use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;*/
@@ -111,14 +111,14 @@ impl ChunksRefs {
     }
 
     /// helper function to sample adjacent voxels, von neuman include all facing planes
-    pub fn get_von_neumann(&self, pos: IVec3) -> [(Direction, &BlockData);6] {
+    pub fn get_von_neumann(&self, pos: IVec3) -> [(Direction, &BlockData); 6] {
         [
             (Direction::Back, self.get_block(pos + ivec3(0, 0, -1))),
             (Direction::Forward, self.get_block(pos + ivec3(0, 0, 1))),
             (Direction::Down, self.get_block(pos + ivec3(0, -1, 0))),
             (Direction::Up, self.get_block(pos + ivec3(0, 1, 0))),
             (Direction::Left, self.get_block(pos + ivec3(-1, 0, 0))),
-            (Direction::Right, self.get_block(pos + ivec3(1, 0, 0)))
+            (Direction::Right, self.get_block(pos + ivec3(1, 0, 0))),
         ]
     }
 

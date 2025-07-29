@@ -24,7 +24,7 @@
 #import bevy_pbr::prepass_utils
 
 struct ChunkMaterial {
-    reflectance: f32,
+    reflectance: vec3<f32>,
     perceptual_roughness: f32,
     metallic: f32,
 };
@@ -66,7 +66,7 @@ struct ModelQuad {
     uv: array<vec2<f32>, 4>,
     normal: vec3<f32>,
 
-    // 3 bits for which face the quad is on (0-5). 
+    // 3 bits for which face the quad is on (0-5).
     // Nearest corner (of the 4 face-corners) to each vertex, used for AO.
     // 2 bits per vertex, 4 vertices.
     // 11 bits total, packed into a u32.
@@ -119,7 +119,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let ambient_lerp = ambient_lerps[ao];
     out.ambient = ambient_lerp;
     out.world_position = world_position;
-    
+
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
     out.texture_id = face.texture_id;
 

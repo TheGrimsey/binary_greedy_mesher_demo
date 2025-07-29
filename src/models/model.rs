@@ -1,4 +1,9 @@
-use bevy::{ecs::system::Resource, math::{Vec2, Vec3}, render::render_resource::ShaderType, utils::HashMap};
+use bevy::{
+    ecs::resource::Resource,
+    math::{Vec2, Vec3},
+    platform::collections::HashMap,
+    render::render_resource::ShaderType,
+};
 
 pub const AO_CORNERS: [[i32; 3]; 8] = [
     [0, 0, 0], // 0
@@ -26,7 +31,7 @@ pub struct ModelQuad {
     pub uv: [Vec2; 4],
     pub normal: Vec3,
 
-    // 3 bits for which face the quad is on (0-5). 
+    // 3 bits for which face the quad is on (0-5).
     // Nearest corner (of the 4 face-corners) to each vertex, used for AO.
     // 2 bits per vertex, 4 vertices.
     // 11 bits total, packed into a u32.
@@ -61,19 +66,18 @@ impl ModelQuad {
 
             self.ao |= (remapped_index as u32) << (3 + i * 2); // Offset by 3 bits for face
         }
-        
 
         self
     }
 }
 
 const FACE_NORMALS: [Vec3; 6] = [
-    Vec3::X,   // +X → 0
-    Vec3::NEG_X,  // -X → 1
-    Vec3::Y,   // +Y → 2
-    Vec3::NEG_Y,  // -Y → 3
-    Vec3::Z,   // +Z → 4
-    Vec3::NEG_Z,  // -Z → 5
+    Vec3::X,     // +X → 0
+    Vec3::NEG_X, // -X → 1
+    Vec3::Y,     // +Y → 2
+    Vec3::NEG_Y, // -Y → 3
+    Vec3::Z,     // +Z → 4
+    Vec3::NEG_Z, // -Z → 5
 ];
 
 const FACE_AXES: [(usize, usize); 6] = [
@@ -100,7 +104,6 @@ fn closest_face_direction(normal: Vec3) -> u32 {
     best_index as u32 // This will be 0–5
 }
 
-
 #[test]
 fn test_ao_corners() {
     use bevy::math::Vec3Swizzles;
@@ -120,15 +123,32 @@ fn test_ao_corners() {
         ],
         normal: Vec3::NEG_X,
         ao: 0,
-    }.with_ao_corner();
+    }
+    .with_ao_corner();
 
     println!("{:b}", model.ao);
     assert_eq!(model.ao & 0b111, 1); // Face normal is -X, so first 3 bits are 001
-    
-    println!("0: {} ({:b})", model.positions[0].yz(), model.ao >> 3 & 0b11);
-    println!("1: {} ({:b})", model.positions[1].yz(), model.ao >> 5 & 0b11);
-    println!("2: {} ({:b})", model.positions[2].yz(), model.ao >> 7 & 0b11);
-    println!("3: {} ({:b})", model.positions[3].yz(), model.ao >> 9 & 0b11);
+
+    println!(
+        "0: {} ({:b})",
+        model.positions[0].yz(),
+        model.ao >> 3 & 0b11
+    );
+    println!(
+        "1: {} ({:b})",
+        model.positions[1].yz(),
+        model.ao >> 5 & 0b11
+    );
+    println!(
+        "2: {} ({:b})",
+        model.positions[2].yz(),
+        model.ao >> 7 & 0b11
+    );
+    println!(
+        "3: {} ({:b})",
+        model.positions[3].yz(),
+        model.ao >> 9 & 0b11
+    );
 
     assert_eq!(model.ao >> 3 & 0b11, 2);
     assert_eq!(model.ao >> 5 & 0b11, 3);
@@ -136,13 +156,12 @@ fn test_ao_corners() {
     assert_eq!(model.ao >> 9 & 0b11, 0);
 
     /*
-    * (0,0) == 0
-    * (0,1) == 2
-    * (1,0) == 1
-    * (1,1) == 3
+     * (0,0) == 0
+     * (0,1) == 2
+     * (1,0) == 1
+     * (1,1) == 3
      */
 
-    
     let model_y = ModelQuad {
         positions: [
             Vec3::new(0.0, 1.0, 0.0),
@@ -158,29 +177,49 @@ fn test_ao_corners() {
         ],
         normal: Vec3::Y,
         ao: 0,
-    }.with_ao_corner();
+    }
+    .with_ao_corner();
 
-    
     println!("{:b}", model_y.ao);
     assert_eq!(model_y.ao & 0b111, 2); // Face normal is +Y, so first 3 bits are 010
-    
-    println!("0: {} ({:b})", model_y.positions[0].xz(), model_y.ao >> 3 & 0b11);
-    println!("1: {} ({:b})", model_y.positions[1].xz(), model_y.ao >> 5 & 0b11);
-    println!("2: {} ({:b})", model_y.positions[2].xz(), model_y.ao >> 7 & 0b11);
-    println!("3: {} ({:b})", model_y.positions[3].xz(), model_y.ao >> 9 & 0b11);
+
+    println!(
+        "0: {} ({:b})",
+        model_y.positions[0].xz(),
+        model_y.ao >> 3 & 0b11
+    );
+    println!(
+        "1: {} ({:b})",
+        model_y.positions[1].xz(),
+        model_y.ao >> 5 & 0b11
+    );
+    println!(
+        "2: {} ({:b})",
+        model_y.positions[2].xz(),
+        model_y.ao >> 7 & 0b11
+    );
+    println!(
+        "3: {} ({:b})",
+        model_y.positions[3].xz(),
+        model_y.ao >> 9 & 0b11
+    );
 
     assert_eq!(model_y.ao >> 3 & 0b11, 2);
     assert_eq!(model_y.ao >> 5 & 0b11, 3);
     assert_eq!(model_y.ao >> 7 & 0b11, 1);
     assert_eq!(model_y.ao >> 9 & 0b11, 0);
-
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Direction {
-    PosX, NegX, PosY, NegY, PosZ, NegZ,
+    PosX,
+    NegX,
+    PosY,
+    NegY,
+    PosZ,
+    NegZ,
 }
-pub const DIRECTIONS : [Direction; 6] = [
+pub const DIRECTIONS: [Direction; 6] = [
     Direction::PosX,
     Direction::NegX,
     Direction::PosY,
@@ -217,5 +256,5 @@ pub enum VoxelTexturingType {
 
 #[derive(Resource, Default, Debug)]
 pub struct ModelRegistry {
-    pub models: Vec<BlockModel>,  
+    pub models: Vec<BlockModel>,
 }

@@ -2,18 +2,20 @@ use std::sync::Arc;
 
 use bevy::{
     color::palettes::css,
-    core::TaskPoolThreadAssignmentPolicy,
     math::ivec3,
     pbr::CascadeShadowConfigBuilder,
+    platform::collections::HashMap,
     prelude::*,
     render::{
         RenderPlugin,
         settings::{RenderCreation, WgpuFeatures, WgpuSettings},
     },
-    utils::hashbrown::HashMap,
 };
 
-use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::{
+    bevy_egui::EguiPlugin,
+    quick::{AssetInspectorPlugin, WorldInspectorPlugin},
+};
 
 use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
@@ -32,25 +34,15 @@ use rand::Rng;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins
-            .set(RenderPlugin {
-                render_creation: RenderCreation::Automatic(WgpuSettings {
-                    // WARN this is a native only feature. It will not work with webgl or webgpu
-                    features: WgpuFeatures::POLYGON_MODE_LINE,
-                    ..default()
-                }),
+        .add_plugins(DefaultPlugins.set(RenderPlugin {
+            render_creation: RenderCreation::Automatic(WgpuSettings {
+                // WARN this is a native only feature. It will not work with webgl or webgpu
+                features: WgpuFeatures::POLYGON_MODE_LINE,
                 ..default()
-            })
-            .set(TaskPoolPlugin {
-                task_pool_options: TaskPoolOptions {
-                    async_compute: TaskPoolThreadAssignmentPolicy {
-                        min_threads: 1,
-                        max_threads: 8,
-                        percent: 0.75,
-                    },
-                    ..default()
-                },
-            }),))
+            }),
+            ..default()
+        }))
+        .add_plugins(EguiPlugin::default())
         .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(AssetInspectorPlugin::<ChunkMaterial>::default())
         .add_plugins(VoxelEnginePlugin)
@@ -262,7 +254,7 @@ pub fn modify_current_terrain(
     if !key.pressed(KeyCode::KeyN) {
         return;
     }
-    let cam_transform = query.single();
+    let cam_transform = query.single().unwrap();
     let cam_chunk = world_to_chunk(cam_transform.translation + (cam_transform.forward() * 64.0));
 
     let mut rng = rand::rng();

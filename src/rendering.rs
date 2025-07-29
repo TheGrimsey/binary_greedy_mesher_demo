@@ -1,19 +1,20 @@
 use std::{num::NonZero, sync::Arc};
 
 use bevy::{
-    asset::{RenderAssetUsages, load_internal_asset},
+    asset::{RenderAssetUsages, load_internal_asset, weak_handle},
     ecs::system::{SystemParamItem, lifetimeless::SRes},
     pbr::{MaterialPipeline, MaterialPipelineKey},
+    platform::collections::HashMap,
     prelude::*,
     render::{
         mesh::MeshVertexBufferLayoutRef,
         render_asset::RenderAssets,
         render_resource::{
             AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout,
-            BindGroupLayoutEntries, BindGroupLayoutEntry, BufferInitDescriptor, BufferUsages,
-            PolygonMode, PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType,
-            ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError, TextureSampleType,
-            UnpreparedBindGroup,
+            BindGroupLayoutEntries, BindGroupLayoutEntry, BindingResources, BufferInitDescriptor,
+            BufferUsages, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor,
+            SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError,
+            TextureSampleType, UnpreparedBindGroup,
             binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer},
             encase::UniformBuffer,
         },
@@ -22,7 +23,6 @@ use bevy::{
         texture::{FallbackImage, GpuImage},
     },
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
-    utils::HashMap,
 };
 use indexmap::IndexSet;
 
@@ -44,9 +44,9 @@ use crate::{
 };
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(138165523578389129966343978676199385893);
+    weak_handle!("f4cc2d00-78bd-4d79-a803-3f5147cb6606");
 pub const CHUNK_PREPASS_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(38749848998489157831713083983198931828);
+    weak_handle!("97a77bda-9a7c-4a3b-8800-15a5f5198777");
 
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
@@ -171,7 +171,7 @@ const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGP
 
 #[derive(Reflect, ShaderType, Debug, Clone, Copy)]
 pub struct MaterialProperties {
-    reflectance: f32,
+    reflectance: Vec3,
     perceptual_roughness: f32,
     metallic: f32,
 }
@@ -299,7 +299,7 @@ impl AsBindGroup for ChunkMaterial {
         );
 
         Ok(PreparedBindGroup {
-            bindings: vec![],
+            bindings: BindingResources(vec![]),
             bind_group,
             data: (),
         })
@@ -310,13 +310,12 @@ impl AsBindGroup for ChunkMaterial {
         _layout: &BindGroupLayout,
         _render_device: &RenderDevice,
         _param: &mut SystemParamItem<'_, '_, Self::Param>,
+        _force_no_bindless: bool,
     ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
-        // we implement as_bind_group directly because
-        panic!("bindless texture arrays can't be owned")
-        // or rather, they can be owned, but then you can't make a `&'a [&'a TextureView]` from a vec of them in get_binding().
+        Err(AsBindGroupError::CreateBindGroupDirectly)
     }
 
-    fn bind_group_layout_entries(_: &RenderDevice) -> Vec<BindGroupLayoutEntry>
+    fn bind_group_layout_entries(_: &RenderDevice, _: bool) -> Vec<BindGroupLayoutEntry>
     where
         Self: Sized,
     {
@@ -562,8 +561,8 @@ pub fn unload_mesh(
 
         vertex_diagnostic.remove(&chunk_pos);
 
-        if let Some(entity_commands) = commands.get_entity(chunk_id) {
-            entity_commands.despawn_recursive();
+        if let Ok(mut entity_commands) = commands.get_entity(chunk_id) {
+            entity_commands.despawn();
         }
 
         load_mesh_queue.swap_remove(&chunk_pos);
@@ -588,7 +587,7 @@ pub fn join_mesh(
     } = mesh_pipeline.as_mut();
 
     let properties = MaterialProperties {
-        reflectance: 0.5,
+        reflectance: Vec3::splat(0.5),
         perceptual_roughness: 1.0,
         metallic: 0.01,
     };
@@ -607,8 +606,12 @@ pub fn join_mesh(
 
         // Despawn the old chunk entity if it exists.
         // Checking before we check the mesh because we may not get a mesh.
-        if let Some(entity) = chunk_mesh_entities.0.remove(world_pos) {
-            commands.entity(entity).despawn_recursive();
+        if let Some(mut entity_commands) = chunk_mesh_entities
+            .0
+            .remove(world_pos)
+            .and_then(|entity| commands.get_entity(entity).ok())
+        {
+            entity_commands.despawn();
         }
 
         let mut total_vertex_count = 0;

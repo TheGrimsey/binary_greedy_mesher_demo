@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
-use bevy::{ecs::system::Resource, utils::HashMap};
+use bevy::{ecs::resource::Resource, platform::collections::HashMap};
 
 use crate::models::model::{ModelId, TexturedBlockModel, VoxelTexturingType};
+use std::sync::Arc;
 
 /// The on disk identifier for a block.
 /// Consistent between adding & removing block types.
@@ -11,7 +10,7 @@ pub struct BlockStringIdentifier(pub Box<str>);
 
 /// The in memory identifier for a block.
 /// Not consistent between adding & removing block types.
-/// 
+///
 /// These ids do not have gaps.
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(pub u16);
@@ -40,11 +39,7 @@ impl BlockRegistry {
         self.block_flags[block_id.0 as usize] & flag != 0
     }
 
-    pub fn add_block(
-        &mut self,
-        identifier: BlockStringIdentifier,
-        block: Block,
-    ) -> BlockId {
+    pub fn add_block(&mut self, identifier: BlockStringIdentifier, block: Block) -> BlockId {
         let flags = match block.visibility {
             BlockVisibilty::Solid => FLAG_SOLID,
             BlockVisibilty::Transparent => FLAG_TRANSPARENT,
@@ -52,12 +47,13 @@ impl BlockRegistry {
         } | block.flags;
 
         let block_id = BlockId(self.block_id_to_string_identifier.len() as u16);
-        
+
         self.block_id_to_string_identifier.push(identifier.clone());
         self.block_flags.push(flags);
         self.block_model.push(block.model);
 
-        self.block_string_identifier_to_id.insert(identifier, block_id);
+        self.block_string_identifier_to_id
+            .insert(identifier, block_id);
 
         block_id
     }
@@ -74,14 +70,14 @@ pub struct BlockData {
 pub enum BlockVisibilty {
     Solid,
     Transparent,
-    Invisible
+    Invisible,
 }
 
 pub struct Block {
     pub visibility: BlockVisibilty,
     pub model: TexturedBlockModel,
     /// The flags for this block.
-    /// 
+    ///
     /// First 2 bits are reserved for solid and transparent.
     pub flags: u8,
 }
