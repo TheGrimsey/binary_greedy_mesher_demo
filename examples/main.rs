@@ -1,22 +1,30 @@
 use std::sync::Arc;
 
 use bevy::{
-    color::palettes::css, core::TaskPoolThreadAssignmentPolicy, math::ivec3, pbr::CascadeShadowConfigBuilder, prelude::*, render::{
-        settings::{RenderCreation, WgpuFeatures, WgpuSettings}, RenderPlugin
-    }, utils::hashbrown::HashMap
+    color::palettes::css,
+    core::TaskPoolThreadAssignmentPolicy,
+    math::ivec3,
+    pbr::CascadeShadowConfigBuilder,
+    prelude::*,
+    render::{
+        RenderPlugin,
+        settings::{RenderCreation, WgpuFeatures, WgpuSettings},
+    },
+    utils::hashbrown::HashMap,
 };
 
 use bevy_inspector_egui::quick::{AssetInspectorPlugin, WorldInspectorPlugin};
-use bevy_screen_diagnostics::{
-    ScreenDiagnosticsPlugin, ScreenEntityDiagnosticsPlugin, ScreenFrameDiagnosticsPlugin,
-};
 
 use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
-    chunk::{ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D}, constants::CHUNK_SIZE3, diagnostics::VoxelDiagnosticsPlugin, models::model::{BlockModel, Direction, ModelQuad, ModelRegistry}, rendering::{
-        ChunkMaterial,
-        RenderingPlugin, TextureBuffer,
-    }, scanner::{DataScanner, MeshScanner, Scanner}, utils::{index_to_ivec3, world_to_chunk}, voxel::*, voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin}
+    chunk::{ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D},
+    constants::CHUNK_SIZE3,
+    models::model::{BlockModel, Direction, ModelQuad, ModelRegistry},
+    rendering::{ChunkMaterial, RenderingPlugin, TextureBuffer},
+    scanner::{DataScanner, MeshScanner, Scanner},
+    utils::{index_to_ivec3, world_to_chunk},
+    voxel::*,
+    voxel_engine::{ChunkModification, VoxelEngine, VoxelEnginePlugin},
 };
 
 use bevy_flycam::prelude::*;
@@ -50,13 +58,6 @@ fn main() {
         // camera plugin
         .add_plugins(NoCameraPlayerPlugin)
         .add_plugins(RenderingPlugin)
-        .add_plugins((
-            ScreenDiagnosticsPlugin::default(),
-            VoxelDiagnosticsPlugin,
-            ScreenFrameDiagnosticsPlugin,
-            ScreenEntityDiagnosticsPlugin,
-            //TemporalAntiAliasPlugin,
-        ))
         .insert_resource(MovementSettings {
             sensitivity: 0.00015, // default: 0.00012
             speed: 64.0 * 2.0,    // default: 12.0
@@ -67,127 +68,143 @@ fn main() {
         .run();
 }
 
-fn load_block_registry(
-    mut commands: Commands,
-) {
+fn load_block_registry(mut commands: Commands) {
     let mut model_registry = ModelRegistry::default();
-    
+
     model_registry.models.push(BlockModel {
         unculled_quads: vec![],
         quads: HashMap::from([
             (
                 Direction::PosX,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(1.0, 0.0, 0.0),
-                        Vec3::new(1.0, 1.0, 0.0),
-                        Vec3::new(1.0, 1.0, 1.0),
-                        Vec3::new(1.0, 0.0, 1.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::X,
-                    ao: 0,
-                }.with_ao_corner()],
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(1.0, 0.0, 0.0),
+                            Vec3::new(1.0, 1.0, 0.0),
+                            Vec3::new(1.0, 1.0, 1.0),
+                            Vec3::new(1.0, 0.0, 1.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::X,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
             (
                 Direction::NegX,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(0.0, 0.0, 1.0),
-                        Vec3::new(0.0, 1.0, 1.0),
-                        Vec3::new(0.0, 1.0, 0.0),
-                        Vec3::new(0.0, 0.0, 0.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::NEG_X,
-                    ao: 0,
-                }.with_ao_corner()]
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(0.0, 0.0, 1.0),
+                            Vec3::new(0.0, 1.0, 1.0),
+                            Vec3::new(0.0, 1.0, 0.0),
+                            Vec3::new(0.0, 0.0, 0.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::NEG_X,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
             (
                 Direction::PosZ,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(1.0, 0.0, 1.0),
-                        Vec3::new(1.0, 1.0, 1.0),
-                        Vec3::new(0.0, 1.0, 1.0),
-                        Vec3::new(0.0, 0.0, 1.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::Z,
-                    ao: 0,
-                }.with_ao_corner()]
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(1.0, 0.0, 1.0),
+                            Vec3::new(1.0, 1.0, 1.0),
+                            Vec3::new(0.0, 1.0, 1.0),
+                            Vec3::new(0.0, 0.0, 1.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::Z,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
             (
                 Direction::NegZ,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(0.0, 0.0, 0.0),
-                        Vec3::new(0.0, 1.0, 0.0),
-                        Vec3::new(1.0, 1.0, 0.0),
-                        Vec3::new(1.0, 0.0, 0.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::NEG_Z,
-                    ao: 0,
-                }.with_ao_corner()]
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Vec3::new(0.0, 1.0, 0.0),
+                            Vec3::new(1.0, 1.0, 0.0),
+                            Vec3::new(1.0, 0.0, 0.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::NEG_Z,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
             (
                 Direction::PosY,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(0.0, 1.0, 0.0),
-                        Vec3::new(0.0, 1.0, 1.0),
-                        Vec3::new(1.0, 1.0, 1.0),
-                        Vec3::new(1.0, 1.0, 0.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::Y,
-                    ao: 0,
-                }.with_ao_corner()]
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(0.0, 1.0, 0.0),
+                            Vec3::new(0.0, 1.0, 1.0),
+                            Vec3::new(1.0, 1.0, 1.0),
+                            Vec3::new(1.0, 1.0, 0.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::Y,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
             (
                 Direction::NegY,
-                vec![ModelQuad {
-                    positions: [
-                        Vec3::new(0.0, 0.0, 0.0),
-                        Vec3::new(1.0, 0.0, 0.0),
-                        Vec3::new(1.0, 0.0, 1.0),
-                        Vec3::new(0.0, 0.0, 1.0),
-                    ],
-                    uv: [
-                        Vec2::new(1.0, 1.0),
-                        Vec2::new(1.0, 0.0),
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(0.0, 1.0),
-                    ],
-                    normal: Vec3::NEG_Y,
-                    ao: 0,
-                }.with_ao_corner()]
+                vec![
+                    ModelQuad {
+                        positions: [
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Vec3::new(1.0, 0.0, 0.0),
+                            Vec3::new(1.0, 0.0, 1.0),
+                            Vec3::new(0.0, 0.0, 1.0),
+                        ],
+                        uv: [
+                            Vec2::new(1.0, 1.0),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(0.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                        ],
+                        normal: Vec3::NEG_Y,
+                        ao: 0,
+                    }
+                    .with_ao_corner(),
+                ],
             ),
         ]),
     });
@@ -196,14 +213,41 @@ fn load_block_registry(
     let mut block_registry = BlockRegistry::default();
     let _ = block_registry.add_block(
         BlockStringIdentifier(Box::from("air")),
-        Block { visibility: BlockVisibilty::Invisible, ..default() },
+        Block {
+            visibility: BlockVisibilty::Invisible,
+            ..default()
+        },
     );
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("dirt")), Block { visibility: BlockVisibilty::Solid, ..default() });
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("grass")), Block { visibility: BlockVisibilty::Solid, ..default() });
+    let _ = block_registry.add_block(
+        BlockStringIdentifier(Box::from("dirt")),
+        Block {
+            visibility: BlockVisibilty::Solid,
+            ..default()
+        },
+    );
+    let _ = block_registry.add_block(
+        BlockStringIdentifier(Box::from("grass")),
+        Block {
+            visibility: BlockVisibilty::Solid,
+            ..default()
+        },
+    );
 
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("glass")), Block { visibility: BlockVisibilty::Transparent, ..default() });
+    let _ = block_registry.add_block(
+        BlockStringIdentifier(Box::from("glass")),
+        Block {
+            visibility: BlockVisibilty::Transparent,
+            ..default()
+        },
+    );
 
-    let _ = block_registry.add_block(BlockStringIdentifier(Box::from("stone")), Block { visibility: BlockVisibilty::Solid, ..default() });
+    let _ = block_registry.add_block(
+        BlockStringIdentifier(Box::from("stone")),
+        Block {
+            visibility: BlockVisibilty::Solid,
+            ..default()
+        },
+    );
 
     commands.insert_resource(BlockRegistryResource(Arc::new(block_registry)));
 
@@ -251,25 +295,25 @@ pub fn setup(
             num_cascades: 3,
             maximum_distance: 32.0 * 20.0,
             ..default()
-        }.build()
+        }
+        .build(),
     ));
     // uncomment for scanner at origin position
     commands.spawn((
         Transform::default(),
         Scanner::<DataScanner>::new(5, Some(5)),
-        Scanner::<MeshScanner>::new(5, Some(5)), 
+        Scanner::<MeshScanner>::new(5, Some(5)),
     ));
 
-    commands
-        .spawn((
-            //Scanner::<DataScanner>::new(16, Some(7)),
-            //Scanner::<MeshScanner>::new(15, Some(6)), 
-            Camera3d::default(),
-            Transform::from_xyz(0.0, 2.0, 0.5),
-            Msaa::Off,
-            //OrderIndependentTransparencySettings::default(),
-            FlyCam
-        ));
+    commands.spawn((
+        //Scanner::<DataScanner>::new(16, Some(7)),
+        //Scanner::<MeshScanner>::new(15, Some(6)),
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 2.0, 0.5),
+        Msaa::Off,
+        //OrderIndependentTransparencySettings::default(),
+        FlyCam,
+    ));
 
     // circular base in origin
     commands.spawn((
@@ -279,16 +323,14 @@ pub fn setup(
     ));
 
     commands.insert_resource(ChunkGenerator {
-        generate: Arc::new(generate)
+        generate: Arc::new(generate),
     });
 
     commands.insert_resource(TextureBuffer::default())
 }
 
-
 /// shape our voxel data based on the chunk_pos
 pub fn generate(chunk_pos: IVec3) -> ChunkData {
-
     // hardcoded extremity check
     let chunk_height_limit = 3;
 
@@ -316,19 +358,28 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     let mut continental_noise = FastNoise::seeded(37);
     continental_noise.set_frequency(0.0002591);
 
-    let continental_noise_downsampler = NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0, None, false);
+    let continental_noise_downsampler =
+        NoiseDownSampler2D::new(5, &continental_noise, chunk_origin.xz(), 55.0, None, false);
 
     let mut errosion = FastNoise::seeded(549);
     errosion.set_frequency(0.004891);
 
-    let errosion_downsampler = NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0, None, false);
+    let errosion_downsampler =
+        NoiseDownSampler2D::new(5, &errosion, chunk_origin.xz(), 1.0, None, false);
 
     let mut fast_noise = FastNoise::new();
     fast_noise.set_frequency(0.002591);
-    let surface_noise = NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0, None, false);
-    
+    let surface_noise =
+        NoiseDownSampler2D::new(1, &fast_noise, chunk_origin.xz(), 30.0, None, false);
+
     fast_noise.set_frequency(0.0254);
-    let overhang_downsamper = NoiseDownSampler3D::new(1, &fast_noise, chunk_origin, 55.0, Some(IVec3::new(0, 12, 0)));
+    let overhang_downsamper = NoiseDownSampler3D::new(
+        1,
+        &fast_noise,
+        chunk_origin,
+        55.0,
+        Some(IVec3::new(0, 12, 0)),
+    );
 
     for i in 0..CHUNK_SIZE3 {
         let voxel_pos = chunk_origin + index_to_ivec3(i);
@@ -343,14 +394,13 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
         let solid = surface_height > voxel_pos.y as f32;
 
         let block_type = match solid {
-            true => match surface_height - voxel_pos.y as f32 { // Distance from surface
+            true => match surface_height - voxel_pos.y as f32 {
+                // Distance from surface
                 y if y > 3.0 => BlockId(4), // Stone
                 y if y > 1.0 => BlockId(1), // Dirt
-                _ => BlockId(2), // Grass
+                _ => BlockId(2),            // Grass
             },
-            false => {
-                BlockId(0)
-            },
+            false => BlockId(0),
         };
         voxels.push(BlockData { block_type });
     }

@@ -2,7 +2,10 @@ pub mod chunk;
 pub mod chunk_mesh;
 pub mod chunks_refs;
 pub mod constants;
+pub mod events;
+pub mod face_model_mesher;
 pub mod lod;
+pub mod models;
 pub mod quad;
 #[cfg(feature = "rendering")]
 pub mod rendering;
@@ -10,9 +13,3 @@ pub mod scanner;
 pub mod utils;
 pub mod voxel;
 pub mod voxel_engine;
-pub mod events;
-pub mod face_model_mesher;
-pub mod models;
-
-#[cfg(feature = "diagnostics")]
-pub mod diagnostics;
