@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bevy::{
+    math::U8Vec3,
     platform::collections::{HashMap, HashSet},
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
@@ -16,7 +17,7 @@ use crate::{
         ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin,
         DataScanner, MeshScanner, Scanner, ScannerPlugin, scan,
     },
-    utils::{get_edging_chunk, vec3_to_index},
+    utils::vec3_to_index_in_chunk,
     voxel::BlockId,
 };
 
@@ -49,11 +50,6 @@ impl Plugin for VoxelEnginePlugin {
     }
 }
 
-#[derive(Debug, Reflect, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum MeshingMethod {
-    BinaryGreedyMeshing,
-}
-
 /// holds all voxel world data
 #[derive(Resource)]
 pub struct VoxelEngine {
@@ -63,25 +59,10 @@ pub struct VoxelEngine {
     pub unload_data_queue: Vec<IVec3>,
     pub data_tasks: HashMap<IVec3, Option<Task<ChunkData>>>,
     pub lod: Lod,
-    pub meshing_method: MeshingMethod,
     pub chunk_modifications: HashMap<IVec3, Vec<ChunkModification>>,
 }
 
-pub struct ChunkModification(pub IVec3, pub BlockId);
-
-impl VoxelEngine {
-    /*pub fn unload_all_meshes(&mut self, scanner: &Scanner, scanner_transform: &GlobalTransform) {
-        // stop all any current proccessing
-        self.load_mesh_queue.clear();
-        self.mesh_tasks.clear();
-        let scan_pos =
-            ((scanner_transform.translation() - Vec3::splat(16.0)) * (1.0 / 32.0)).as_ivec3();
-        for offset in &scanner.mesh_sampling_offsets {
-            let wpos = scan_pos + *offset;
-            self.load_mesh_queue.insert(wpos);
-        }
-    }*/
-}
+pub struct ChunkModification(pub U8Vec3, pub BlockId);
 
 impl Default for VoxelEngine {
     fn default() -> Self {
@@ -91,7 +72,6 @@ impl Default for VoxelEngine {
             unload_data_queue: Vec::new(),
             data_tasks: HashMap::new(),
             lod: Lod::L32,
-            meshing_method: MeshingMethod::BinaryGreedyMeshing,
             chunk_modifications: HashMap::new(),
         }
     }
@@ -184,32 +164,29 @@ pub fn start_modifications(
         };
         let new_chunk_data = Arc::make_mut(chunk_data);
         for ChunkModification(local_pos, block_type) in mods.into_iter() {
-            let i = vec3_to_index(local_pos, 32);
+            let i = vec3_to_index_in_chunk(local_pos.as_uvec3());
             if new_chunk_data.voxels.len() == 1 {
                 let value = new_chunk_data.voxels[0];
                 new_chunk_data.voxels.resize(CHUNK_SIZE3, value);
             }
             new_chunk_data.voxels[i].block_type = block_type;
-            if let Some(edge_chunk) = get_edging_chunk(local_pos) {
-                updated_and_adjecant_chunks_set.insert(chunk_pos + edge_chunk);
-            }
 
             // Add pos chunks to the modified list.
             if local_pos.x == 0 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(1, 0, 0));
-            } else if local_pos.x == CHUNK_SIZE as i32 - 1 {
+            } else if local_pos.x == CHUNK_SIZE as u8 - 1 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(1, 0, 0));
             }
 
             if local_pos.y == 0 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(0, 1, 0));
-            } else if local_pos.y == CHUNK_SIZE as i32 - 1 {
+            } else if local_pos.y == CHUNK_SIZE as u8 - 1 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(0, 1, 0));
             }
 
             if local_pos.z == 0 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos - IVec3::new(0, 0, 1));
-            } else if local_pos.z == CHUNK_SIZE as i32 - 1 {
+            } else if local_pos.z == CHUNK_SIZE as u8 - 1 {
                 updated_and_adjecant_chunks_set.insert(chunk_pos + IVec3::new(0, 0, 1));
             }
         }

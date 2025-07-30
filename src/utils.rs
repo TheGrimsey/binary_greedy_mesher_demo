@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::constants::CHUNK_SIZE;
+
 pub const CHUNK_POWER: i32 = 5;
 
 #[inline]
@@ -91,7 +93,7 @@ pub fn make_vertex_u32(
 }
 
 #[inline]
-const fn x_positive_bits(bits: u32) -> u32{
+const fn x_positive_bits(bits: u32) -> u32 {
     (1 << bits) - 1
 }
 
@@ -111,7 +113,7 @@ pub fn world_to_chunk(pos: Vec3) -> IVec3 {
 
 /// Convert a world space voxel position to a chunk-local voxel position (0-31).
 pub fn world_to_chunk_local_voxel(voxel: IVec3) -> IVec3 {
-    voxel & ((1 << CHUNK_POWER) - 1) 
+    voxel & ((1 << CHUNK_POWER) - 1)
 }
 
 /// generate a vec of indices
@@ -151,5 +153,13 @@ pub fn vec3_to_index(pos: IVec3, bounds: i32) -> usize {
     let x_i = pos.x % bounds;
     let y_i = pos.y * bounds;
     let z_i = pos.z * (bounds * bounds);
+    (x_i + y_i + z_i) as usize
+}
+
+#[inline]
+pub fn vec3_to_index_in_chunk(pos: UVec3) -> usize {
+    let x_i = pos.x as usize % CHUNK_SIZE;
+    let y_i = pos.y as usize * CHUNK_SIZE;
+    let z_i = pos.z as usize * (CHUNK_SIZE * CHUNK_SIZE);
     (x_i + y_i + z_i) as usize
 }

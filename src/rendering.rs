@@ -40,7 +40,7 @@ use crate::{
         GlobalScannerDesiredChunks, MeshScanner, Scanner,
     },
     voxel::{BlockRegistryResource, FLAG_SOLID, FLAG_TRANSPARENT},
-    voxel_engine::{MeshingMethod, VoxelEngine, join_data},
+    voxel_engine::{VoxelEngine, join_data},
 };
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
@@ -450,10 +450,7 @@ pub fn start_mesh_tasks(
     let task_pool = AsyncComputeTaskPool::get();
 
     let VoxelEngine {
-        world_data,
-        lod,
-        meshing_method,
-        ..
+        world_data, lod, ..
     } = voxel_engine.as_ref();
 
     // Order by FURTHEST distance to any scanner.
@@ -511,28 +508,26 @@ pub fn start_mesh_tasks(
         let block_registry = block_registry.0.clone();
         let model_registry = model_registry.0.clone();
 
-        let task = match meshing_method {
-            MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
-                MeshTask {
-                    opaque: crate::face_model_mesher::build_chunk_mesh(
-                        &chunks_refs,
-                        llod,
-                        &block_registry,
-                        &model_registry,
-                        FLAG_SOLID,
-                        true,
-                    ),
-                    transparent: crate::face_model_mesher::build_chunk_mesh(
-                        &chunks_refs,
-                        llod,
-                        &block_registry,
-                        &model_registry,
-                        FLAG_TRANSPARENT,
-                        true,
-                    ),
-                }
-            }),
-        };
+        let task = task_pool.spawn(async move {
+            MeshTask {
+                opaque: crate::face_model_mesher::build_chunk_mesh(
+                    &chunks_refs,
+                    llod,
+                    &block_registry,
+                    &model_registry,
+                    FLAG_SOLID,
+                    true,
+                ),
+                transparent: crate::face_model_mesher::build_chunk_mesh(
+                    &chunks_refs,
+                    llod,
+                    &block_registry,
+                    &model_registry,
+                    FLAG_TRANSPARENT,
+                    true,
+                ),
+            }
+        });
 
         mesh_pipeline.mesh_tasks.push((world_pos, Some(task)));
     }

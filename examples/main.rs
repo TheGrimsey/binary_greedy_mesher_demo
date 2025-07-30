@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy::{
     color::palettes::css,
-    math::ivec3,
+    math::U8Vec3,
     pbr::CascadeShadowConfigBuilder,
     platform::collections::HashMap,
     prelude::*,
@@ -260,7 +260,7 @@ pub fn modify_current_terrain(
     let mut rng = rand::rng();
     let mut mods = vec![];
     for _i in 0..32 * 32 {
-        let pos = ivec3(
+        let pos = U8Vec3::new(
             rng.random_range(0..32),
             rng.random_range(0..32),
             rng.random_range(0..32),
