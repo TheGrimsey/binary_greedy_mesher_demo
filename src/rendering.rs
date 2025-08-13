@@ -516,6 +516,7 @@ pub fn start_mesh_tasks(
                     &block_registry,
                     &model_registry,
                     FLAG_OPAQUE,
+                    FLAG_SOLID,
                     true,
                 ),
                 transparent: crate::face_model_mesher::build_chunk_mesh(
@@ -524,6 +525,7 @@ pub fn start_mesh_tasks(
                     &block_registry,
                     &model_registry,
                     FLAG_TRANSPARENT,
+                    FLAG_SOLID | FLAG_TRANSPARENT,
                     true,
                 ),
             }

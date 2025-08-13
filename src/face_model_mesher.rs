@@ -28,6 +28,7 @@ pub fn build_chunk_mesh(
     block_registry: &BlockRegistry,
     model_registry: &IndexedModelRegistry,
     flag_to_build: u8,
+    no_face_flag: u8,
     calculate_ao: bool,
 ) -> Option<ChunkMesh> {
     let _span = info_span!("Meshing Chunk.").entered();
@@ -56,7 +57,7 @@ pub fn build_chunk_mesh(
                 for (i, &offset) in DIRECTION_OFFSET.iter().enumerate() {
                     let neighbor_pos = pos + offset;
                     let neighbor_block = chunks_refs.get_block(neighbor_pos);
-                    if !block_registry.has_flag(neighbor_block.block_type, flag_to_build) {
+                    if !block_registry.has_flag(neighbor_block.block_type, no_face_flag) {
                         visible_faces |= 1 << i;
                     }
                 }
