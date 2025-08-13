@@ -46,7 +46,8 @@ impl BlockRegistry {
 
     pub fn add_block(&mut self, identifier: BlockStringIdentifier, block: Block) -> BlockId {
         let flags = match block.visibility {
-            BlockVisibilty::Solid => FLAG_SOLID,
+            BlockVisibilty::Solid => FLAG_SOLID | FLAG_OPAQUE,
+            BlockVisibilty::Opaque => FLAG_OPAQUE,
             BlockVisibilty::Transparent => FLAG_TRANSPARENT,
             BlockVisibilty::Invisible => 0,
         } | block.flags;
@@ -74,6 +75,7 @@ pub struct BlockData {
 
 pub enum BlockVisibilty {
     Solid,
+    Opaque,
     Transparent,
     Invisible,
 }
