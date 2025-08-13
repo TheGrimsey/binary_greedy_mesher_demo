@@ -39,7 +39,7 @@ use crate::{
         ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos,
         GlobalScannerDesiredChunks, MeshScanner, Scanner,
     },
-    voxel::{BlockRegistryResource, FLAG_SOLID, FLAG_TRANSPARENT},
+    voxel::{BlockRegistryResource, FLAG_OPAQUE, FLAG_SOLID, FLAG_TRANSPARENT},
     voxel_engine::{VoxelEngine, join_data},
 };
 
@@ -515,7 +515,7 @@ pub fn start_mesh_tasks(
                     llod,
                     &block_registry,
                     &model_registry,
-                    FLAG_SOLID,
+                    FLAG_OPAQUE,
                     true,
                 ),
                 transparent: crate::face_model_mesher::build_chunk_mesh(

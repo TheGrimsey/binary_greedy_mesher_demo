@@ -15,8 +15,13 @@ pub struct BlockStringIdentifier(pub Box<str>);
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(pub u16);
 
+/// All faces of this voxel are solid & aligned with the grid.
+/// We don't need to add cullable faces adjacent to this voxel.
 pub const FLAG_SOLID: u8 = 1 << 0;
-pub const FLAG_TRANSPARENT: u8 = 1 << 1;
+/// This voxel's faces are fully opaque & should be added to the opaque mesh.
+pub const FLAG_OPAQUE: u8 = 1 << 1;
+/// At least one of this voxel's faces are transparent & should be added to the transparent mesh.
+pub const FLAG_TRANSPARENT: u8 = 1 << 2;
 
 #[derive(Default, Debug, Clone)]
 pub struct BlockRegistry {
