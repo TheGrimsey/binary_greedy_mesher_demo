@@ -103,7 +103,7 @@ pub fn build_single_block_mesh(
     let mut chunk_mesh = ChunkMesh::default();
 
     let textured_model = &block_registry.block_model[block_id.0 as usize];
-    let model = &model_registry.models[block_id.0 as usize];
+    let model = &model_registry.models[textured_model.model.0 as usize];
 
     add_block_to_mesh(&mut chunk_mesh, 0b111111, textured_model, model, [0; 6], 0);
 
