@@ -107,6 +107,8 @@ pub fn build_single_block_mesh(
 
     add_block_to_mesh(&mut chunk_mesh, 0b111111, textured_model, model, [0; 6], 0);
 
+    chunk_mesh.indices = generate_indices(chunk_mesh.faces.len());
+
     let (mesh, faces) = chunk_mesh.to_bevy_mesh();
 
     let mut face_buffer = ShaderStorageBuffer::from(faces);
