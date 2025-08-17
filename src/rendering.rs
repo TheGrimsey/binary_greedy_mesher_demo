@@ -171,9 +171,18 @@ const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGP
 
 #[derive(Reflect, ShaderType, Debug, Clone, Copy)]
 pub struct MaterialProperties {
-    reflectance: Vec3,
-    perceptual_roughness: f32,
-    metallic: f32,
+    pub reflectance: Vec3,
+    pub perceptual_roughness: f32,
+    pub metallic: f32,
+}
+impl Default for MaterialProperties {
+    fn default() -> Self {
+        MaterialProperties {
+            reflectance: Vec3::splat(0.5),
+            perceptual_roughness: 1.0,
+            metallic: 0.01,
+        }
+    }
 }
 
 #[derive(Asset, Reflect, Debug, Clone)]
@@ -583,11 +592,7 @@ pub fn join_mesh(
         ..
     } = mesh_pipeline.as_mut();
 
-    let properties = MaterialProperties {
-        reflectance: Vec3::splat(0.5),
-        perceptual_roughness: 1.0,
-        metallic: 0.01,
-    };
+    let properties = MaterialProperties::default();
 
     for (world_pos, task_option) in mesh_tasks.iter_mut() {
         let Some(mut task) = task_option.take() else {
