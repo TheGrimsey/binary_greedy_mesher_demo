@@ -20,7 +20,7 @@
 #import bevy_pbr::mesh_view_bindings
 #import bevy_pbr::mesh_bindings
 #import bevy_pbr::mesh_bindings::mesh
-#import bevy_pbr::pbr_types::pbr_input_new
+#import bevy_pbr::pbr_types::{pbr_input_new, STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT};
 #import bevy_pbr::prepass_utils
 
 struct ChunkMaterial {
@@ -133,7 +133,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 fn fragment(input: VertexOutput) -> FragmentOutput {
     var pbr_input = pbr_input_new();
 
-    pbr_input.flags = mesh[input.instance_index].flags;
+    pbr_input.flags = mesh[input.instance_index].flags | STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT;
 
     pbr_input.V = calculate_view(input.world_position, false);
     pbr_input.frag_coord = input.clip_position;
