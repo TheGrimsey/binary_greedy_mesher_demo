@@ -305,6 +305,14 @@ pub fn setup(
         Msaa::Off,
         //OrderIndependentTransparencySettings::default(),
         FlyCam,
+        DistanceFog {
+            color: Color::srgb(0.0, 0.0, 1.0),
+            falloff: FogFalloff::Linear {
+                start: 5.0,
+                end: 20.0,
+            },
+            ..default()
+        },
     ));
 
     // circular base in origin

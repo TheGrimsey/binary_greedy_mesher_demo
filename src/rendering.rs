@@ -220,6 +220,9 @@ impl Material for ChunkMaterial {
             .0
             .get_layout(&[ATTRIBUTE_VOXEL.at_shader_location(0)])?;
         descriptor.vertex.buffers = vec![vertex_layout];
+
+        descriptor.vertex.shader_defs.push("DISTANCE_FOG".into());
+
         Ok(())
     }
 

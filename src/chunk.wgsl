@@ -19,6 +19,7 @@
 #import bevy_pbr::pbr_functions::{calculate_view, prepare_world_normal}
 #import bevy_pbr::mesh_view_bindings
 #import bevy_pbr::mesh_bindings
+#import bevy_pbr::mesh_view_types
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_pbr::pbr_types::{pbr_input_new, STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT};
 #import bevy_pbr::prepass_utils
@@ -166,8 +167,47 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
     // apply lighting
     out.color = apply_pbr_lighting(pbr_input);
+    out.color = apply_fog(mesh_view_bindings::fog, out.color, pbr_input.world_position.xyz, mesh_view_bindings::view.world_position.xyz);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 
     return out;
+}
+
+fn apply_fog(fog_params: mesh_view_types::Fog, input_color: vec4<f32>, fragment_world_position: vec3<f32>, view_world_position: vec3<f32>) -> vec4<f32> {
+    let view_to_world = fragment_world_position.xyz - view_world_position.xyz;
+
+    // `length()` is used here instead of just `view_to_world.z` since that produces more
+    // high quality results, especially for denser/smaller fogs. we get a "curved"
+    // fog shape that remains consistent with camera rotation, instead of a "linear"
+    // fog shape that looks a bit fake
+    let distance = length(view_to_world);
+
+    var scattering = vec3<f32>(0.0);
+    if fog_params.directional_light_color.a > 0.0 {
+        let view_to_world_normalized = view_to_world / distance;
+        let n_directional_lights = mesh_view_bindings::lights.n_directional_lights;
+        for (var i: u32 = 0u; i < n_directional_lights; i = i + 1u) {
+            let light = mesh_view_bindings::lights.directional_lights[i];
+            scattering += pow(
+                max(
+                    dot(view_to_world_normalized, light.direction_to_light),
+                    0.0
+                ),
+                fog_params.directional_light_exponent
+            ) * light.color.rgb * mesh_view_bindings::view.exposure;
+        }
+    }
+
+    if fog_params.mode == mesh_view_types::FOG_MODE_LINEAR {
+        return bevy_pbr::fog::linear_fog(fog_params, input_color, distance, scattering);
+    } else if fog_params.mode == mesh_view_types::FOG_MODE_EXPONENTIAL {
+        return bevy_pbr::fog::exponential_fog(fog_params, input_color, distance, scattering);
+    } else if fog_params.mode == mesh_view_types::FOG_MODE_EXPONENTIAL_SQUARED {
+        return bevy_pbr::fog::exponential_squared_fog(fog_params, input_color, distance, scattering);
+    } else if fog_params.mode == mesh_view_types::FOG_MODE_ATMOSPHERIC {
+        return bevy_pbr::fog::atmospheric_fog(fog_params, input_color, distance, scattering);
+    } else {
+        return input_color;
+    }
 }
