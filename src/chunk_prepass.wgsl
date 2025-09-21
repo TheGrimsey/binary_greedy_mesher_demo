@@ -72,7 +72,7 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
 
     let first_vertex = mesh[vertex.instance_index].first_vertex_index;
     let vertex_index = vertex.index - first_vertex;
-    
+
     let face_id = vertex_index >> 2;
     let vertex_id = vertex_index & 3u;
 
@@ -125,7 +125,7 @@ fn fragment(in: MyVertexOutput) -> FragmentOutput {
 #endif
 
 #ifdef DEFERRED_PREPASS
-    // There isn't any material info available for this default prepass shader so we are just writing 
+    // There isn't any material info available for this default prepass shader so we are just writing
     // emissive magenta out to the deferred gbuffer to be rendered by the first deferred lighting pass layer.
     // This is here so if the default prepass fragment is used for deferred magenta will be rendered, and also
     // as an example to show that a user could write to the deferred gbuffer if they were to start from this shader.

@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use bracket_noise::prelude::*;
 
 use crate::{
-    constants::CHUNK_SIZE, voxel::BlockData
+    constants::{CHUNK_SIZE, CHUNK_SIZE3},
+    voxel::BlockData,
 };
 
 #[derive(Resource)]
@@ -27,7 +28,7 @@ impl ChunkData {
         }
     }
 
-    // returns the block type if all voxels are the same
+    /// returns the block type if all voxels are the same
     #[inline]
     pub fn get_block_if_filled(&self) -> Option<&BlockData> {
         if self.voxels.len() == 1 {
@@ -36,28 +37,43 @@ impl ChunkData {
             None
         }
     }
+
+    pub fn expand_if_necessary(&mut self) {
+        if self.voxels.len() == 1 {
+            let block = self.voxels[0].clone();
+            self.voxels.resize(CHUNK_SIZE3, block);
+        }
+    }
+    pub fn compress_if_possible(&mut self) {
+        if self.voxels.len() > 1 {
+            let first = &self.voxels[0];
+            if self.voxels.iter().all(|b| b == first) {
+                self.voxels.truncate(1);
+                self.voxels.shrink_to_fit();
+            }
+        }
+    }
 }
 
-fn bilinear_interpolation(
-    alpha: f32,
-    beta: f32,
-    x00: f32,
-    x10: f32,
-    x01: f32,
-    x11: f32,
-) -> f32 {
-    (1.0 - alpha) * (1.0 - beta) * x00 +
-    alpha * (1.0 - beta) * x10 +
-    (1.0 - alpha) * beta * x01 +
-    alpha * beta * x11
+fn bilinear_interpolation(alpha: f32, beta: f32, x00: f32, x10: f32, x01: f32, x11: f32) -> f32 {
+    (1.0 - alpha) * (1.0 - beta) * x00
+        + alpha * (1.0 - beta) * x10
+        + (1.0 - alpha) * beta * x01
+        + alpha * beta * x11
 }
 
 fn trilinear_interpolation(
     alpha: f32,
     beta: f32,
     gamma: f32,
-    x000: f32, x100: f32, x010: f32, x110: f32,
-    x001: f32, x101: f32, x011: f32, x111: f32,
+    x000: f32,
+    x100: f32,
+    x010: f32,
+    x110: f32,
+    x001: f32,
+    x101: f32,
+    x011: f32,
+    x111: f32,
 ) -> f32 {
     let c00 = (1.0 - alpha) * x000 + alpha * x100;
     let c01 = (1.0 - alpha) * x001 + alpha * x101;
@@ -88,21 +104,23 @@ fn test_interpolate() {
 
     continental_noise.set_frequency(0.0254);
     continental_noise.set_seed(388);
-    let continental_noise_downsampler = NoiseDownSampler3D::new(2, &continental_noise, IVec3::ZERO, 55.0, None);
+    let continental_noise_downsampler =
+        NoiseDownSampler3D::new(2, &continental_noise, IVec3::ZERO, 55.0, None);
 
     //let n0 = continental_noise_downsampler.get_noise(IVec3::new(0, 0,0));
     //println!("{n0} - {}", continental_noise.get_noise3d(0.0, 0.0, 0.0) * 55.0);
-    
+
     let n1 = continental_noise_downsampler.get_noise(IVec3::new(0, 1, 0));
-    println!("{n1} - {}", continental_noise.get_noise3d(0.0, 1.0, 0.0) * 55.0);
-    
+    println!(
+        "{n1} - {}",
+        continental_noise.get_noise3d(0.0, 1.0, 0.0) * 55.0
+    );
+
     //let n2 = continental_noise_downsampler.get_noise(IVec3::new(2, 0, 0));
     //println!("{n2} - {}", continental_noise.get_noise3d(2.0, 0.0, 0.0) * 55.0);
-    
+
     //let n3 = continental_noise_downsampler.get_noise(IVec3::new(31, 31, 31));
     //println!("{n3} - {} - S{}", continental_noise.get_noise3d(31.0, 31.0, 31.0) * 55.0, continental_noise_downsampler.samples.last().unwrap());
-    
-
 }
 
 #[derive(Debug, Clone)]
@@ -110,16 +128,24 @@ pub struct NoiseDownSampler2D {
     samples: Box<[f32]>,
     upsampling: i32,
     min_point: IVec2,
-    edge_length: i32
+    edge_length: i32,
 }
 impl NoiseDownSampler2D {
-    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec2, scale: f32, buffer: Option<i16>, unitised: bool) -> Self {
+    pub fn new(
+        upsampling: i32,
+        noise: &FastNoise,
+        chunk_origin: IVec2,
+        scale: f32,
+        buffer: Option<i16>,
+        unitised: bool,
+    ) -> Self {
         let buffer = buffer.unwrap_or(0) as i32;
 
         let min_point: IVec2 = (chunk_origin >> upsampling) - buffer;
-        let max_point: IVec2 = ((chunk_origin + IVec2::splat(CHUNK_SIZE as i32)) >> upsampling) + 1 + buffer;
+        let max_point: IVec2 =
+            ((chunk_origin + IVec2::splat(CHUNK_SIZE as i32)) >> upsampling) + 1 + buffer;
 
-        let edge_length = max_point.x - min_point.x; 
+        let edge_length = max_point.x - min_point.x;
         let mut samples = vec![0.0; (edge_length * edge_length) as usize].into_boxed_slice();
 
         for sample_point_z in min_point.y..max_point.y {
@@ -130,10 +156,7 @@ impl NoiseDownSampler2D {
                 let index = sample_point - min_point;
                 let index = index.x + index.y * edge_length;
 
-                let noise_value = noise.get_noise(
-                    world_point.x as f32,
-                    world_point.y as f32,
-                );
+                let noise_value = noise.get_noise(world_point.x as f32, world_point.y as f32);
 
                 let sample_value = if unitised {
                     noise_value * 0.5 + 0.5
@@ -149,7 +172,7 @@ impl NoiseDownSampler2D {
             samples,
             upsampling,
             min_point,
-            edge_length
+            edge_length,
         }
     }
 
@@ -165,9 +188,17 @@ impl NoiseDownSampler2D {
         let sample_value_11 = self.samples[(index + self.edge_length + 1) as usize];
 
         let world_sample_point: IVec2 = world_sample_point << self.upsampling;
-        let sample_point = (world_pos - world_sample_point).as_vec2() / (1 << self.upsampling) as f32;
-        
-        bilinear_interpolation(sample_point.x, sample_point.y, sample_value_00, sample_value_10, sample_value_01, sample_value_11)
+        let sample_point =
+            (world_pos - world_sample_point).as_vec2() / (1 << self.upsampling) as f32;
+
+        bilinear_interpolation(
+            sample_point.x,
+            sample_point.y,
+            sample_value_00,
+            sample_value_10,
+            sample_value_01,
+            sample_value_11,
+        )
     }
 }
 
@@ -176,12 +207,21 @@ pub struct NoiseDownSampler3D {
     samples: Box<[f32]>,
     upsampling: i32,
     min_point: IVec3,
-    edge_length: IVec3
+    edge_length: IVec3,
 }
 impl NoiseDownSampler3D {
-    pub fn new(upsampling: i32, noise: &FastNoise, chunk_origin: IVec3, scale: f32, buffer: Option<IVec3>) -> Self {
+    pub fn new(
+        upsampling: i32,
+        noise: &FastNoise,
+        chunk_origin: IVec3,
+        scale: f32,
+        buffer: Option<IVec3>,
+    ) -> Self {
         let min_point: IVec3 = (chunk_origin - buffer.unwrap_or(IVec3::ZERO)) >> upsampling;
-        let max_point: IVec3 = ((chunk_origin + IVec3::splat(CHUNK_SIZE as i32) + buffer.unwrap_or(IVec3::ZERO)) >> upsampling) + 1;
+        let max_point: IVec3 =
+            ((chunk_origin + IVec3::splat(CHUNK_SIZE as i32) + buffer.unwrap_or(IVec3::ZERO))
+                >> upsampling)
+                + 1;
 
         let edge_length = max_point - min_point;
         let total_size = (edge_length.x * edge_length.y * edge_length.z) as usize;
@@ -194,8 +234,8 @@ impl NoiseDownSampler3D {
                     let world_point = sample_point << upsampling;
 
                     let index = (sample_point_x - min_point.x)
-                              + (sample_point_z - min_point.z) * edge_length.x
-                              + (sample_point_y - min_point.y) * edge_length.x * edge_length.z;
+                        + (sample_point_z - min_point.z) * edge_length.x
+                        + (sample_point_y - min_point.y) * edge_length.x * edge_length.z;
 
                     let sample_value = noise.get_noise3d(
                         world_point.x as f32,
@@ -220,23 +260,26 @@ impl NoiseDownSampler3D {
         let world_sample_point = world_pos >> self.upsampling;
         let local_sample_point = world_sample_point - self.min_point;
 
-        let index = local_sample_point.x + local_sample_point.z * self.edge_length.x + local_sample_point.y * self.edge_length.x * self.edge_length.z;
+        let index = local_sample_point.x
+            + local_sample_point.z * self.edge_length.x
+            + local_sample_point.y * self.edge_length.x * self.edge_length.z;
         let layer_offset = self.edge_length.x * self.edge_length.z;
-        
+
         let sample_value_000 = self.samples[index as usize];
         let sample_value_100 = self.samples[(index + 1) as usize];
         let sample_value_010 = self.samples[(index + self.edge_length.x) as usize];
         let sample_value_110 = self.samples[(index + self.edge_length.x + 1) as usize];
-    
+
         let sample_value_001 = self.samples[(index + layer_offset) as usize];
         let sample_value_101 = self.samples[(index + 1 + layer_offset) as usize];
         let sample_value_011 = self.samples[(index + self.edge_length.x + layer_offset) as usize];
-        let sample_value_111 = self.samples[(index + self.edge_length.x + 1 + layer_offset) as usize];
+        let sample_value_111 =
+            self.samples[(index + self.edge_length.x + 1 + layer_offset) as usize];
 
-        
         let world_sample_point = world_sample_point << self.upsampling;
-        let sample_point = (world_pos - world_sample_point).as_vec3() / (1 << self.upsampling) as f32;
-        
+        let sample_point =
+            (world_pos - world_sample_point).as_vec3() / (1 << self.upsampling) as f32;
+
         trilinear_interpolation(
             sample_point.x,
             sample_point.z,
@@ -248,7 +291,7 @@ impl NoiseDownSampler3D {
             sample_value_001,
             sample_value_101,
             sample_value_011,
-            sample_value_111
+            sample_value_111,
         )
     }
 }

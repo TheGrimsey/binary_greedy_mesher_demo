@@ -165,10 +165,7 @@ pub fn start_modifications(
         let new_chunk_data = Arc::make_mut(chunk_data);
         for ChunkModification(local_pos, block_type) in mods.into_iter() {
             let i = vec3_to_index_in_chunk(local_pos.as_uvec3());
-            if new_chunk_data.voxels.len() == 1 {
-                let value = new_chunk_data.voxels[0];
-                new_chunk_data.voxels.resize(CHUNK_SIZE3, value);
-            }
+            new_chunk_data.expand_if_necessary();
             new_chunk_data.voxels[i].block_type = block_type;
 
             // Add pos chunks to the modified list.

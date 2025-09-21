@@ -68,7 +68,7 @@ impl BlockRegistry {
 #[derive(Debug, Resource)]
 pub struct BlockRegistryResource(pub Arc<BlockRegistry>);
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct BlockData {
     pub block_type: BlockId,
 }

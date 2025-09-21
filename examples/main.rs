@@ -308,8 +308,8 @@ pub fn setup(
         DistanceFog {
             color: Color::srgb(0.0, 0.0, 1.0),
             falloff: FogFalloff::Linear {
-                start: 5.0,
-                end: 20.0,
+                start: 64.0,
+                end: 512.0,
             },
             ..default()
         },
