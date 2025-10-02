@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy::{
-    math::{IVec3, UVec3, ivec3},
+    math::{IVec3, UVec3},
     platform::collections::HashMap,
 };
 /*use rand::{Rng, SeedableRng};
@@ -9,9 +9,8 @@ use rand_chacha::ChaCha8Rng;*/
 
 use crate::{
     chunk::ChunkData,
-    quad::Direction,
-    utils::{index_to_ivec3_bounds, vec3_to_index, vec3_to_index_in_chunk},
-    voxel::BlockData,
+    utils::{CHUNK_POWER, index_to_ivec3_bounds, vec3_to_index, vec3_to_index_in_chunk},
+    voxel::BlockId,
 };
 
 // pointers to chunk data, a middle one with all their neighbours
@@ -41,82 +40,37 @@ impl ChunksRefs {
     // so may be inacurate, but the odds are incredibly low
     pub fn is_all_voxels_same(&self) -> bool {
         let first_block = self.chunks[0].get_block_if_filled();
-        let Some(block) = first_block else {
+        if first_block.is_none() {
             return false;
         };
-        for chunk in self.chunks[1..].iter() {
-            let option = chunk.get_block_if_filled();
-            if let Some(v) = option {
-                if block.block_type != v.block_type {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        true
-    }
 
-    /*/// only use for testing purposes
-    pub fn make_dummy_chunk_refs(seed: u64) -> ChunksRefs {
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let mut chunks = vec![];
-        let pos = IVec3::new(
-            rng.random_range(-20..20),
-            rng.random_range(-5..5),
-            rng.random_range(-20..20),
-        );
-        for i in 0..3 * 3 * 3 {
-            let offset = index_to_ivec3_bounds(i, 3) + IVec3::NEG_ONE;
-            chunks.push(Arc::new(generate(pos + offset)));
-        }
-        ChunksRefs { chunks }
-    }*/
+        self.chunks
+            .iter()
+            .skip(1)
+            .all(|chunk| chunk.get_block_if_filled() == first_block)
+    }
 
     /// helper function to get block data that may exceed the bounds of the middle chunk
     /// input position is local pos to middle chunk
-    pub fn get_block(&self, pos: IVec3) -> &BlockData {
+    pub fn get_block(&self, pos: IVec3) -> BlockId {
         let x = (pos.x + 32) as u32;
         let y = (pos.y + 32) as u32;
         let z = (pos.z + 32) as u32;
-        let (x_chunk, x) = ((x / 32) as i32, (x % 32));
-        let (y_chunk, y) = ((y / 32) as i32, (y % 32));
-        let (z_chunk, z) = ((z / 32) as i32, (z % 32));
 
-        let chunk_index = vec3_to_index(IVec3::new(x_chunk, y_chunk, z_chunk), 3);
+        self.get_block_pre_offset(IVec3::new(x as i32, y as i32, z as i32))
+    }
+    pub fn get_block_pre_offset(&self, pos: IVec3) -> BlockId {
+        let chunk = pos >> CHUNK_POWER;
+        let local_pos = pos & ((1 << CHUNK_POWER) - 1);
+
+        let chunk_index = vec3_to_index(chunk, 3);
         let chunk_data = &self.chunks[chunk_index];
-        let i = vec3_to_index_in_chunk(UVec3::new(x, y, z));
+        let i = vec3_to_index_in_chunk(local_pos.as_uvec3());
         chunk_data.get_block(i)
     }
 
-    /// helper function to sample adjacent(back,left,down) voxels
-    pub fn get_adjacent_blocks(
-        &self,
-        pos: IVec3,
-        // current back, left, down
-    ) -> (&BlockData, &BlockData, &BlockData, &BlockData) {
-        let current = self.get_block(pos);
-        let back = self.get_block(pos + ivec3(0, 0, -1));
-        let left = self.get_block(pos + ivec3(-1, 0, 0));
-        let down = self.get_block(pos + ivec3(0, -1, 0));
-        (current, back, left, down)
-    }
-
-    /// helper function to sample adjacent voxels, von neuman include all facing planes
-    pub fn get_von_neumann(&self, pos: IVec3) -> [(Direction, &BlockData); 6] {
-        [
-            (Direction::Back, self.get_block(pos + ivec3(0, 0, -1))),
-            (Direction::Forward, self.get_block(pos + ivec3(0, 0, 1))),
-            (Direction::Down, self.get_block(pos + ivec3(0, -1, 0))),
-            (Direction::Up, self.get_block(pos + ivec3(0, 1, 0))),
-            (Direction::Left, self.get_block(pos + ivec3(-1, 0, 0))),
-            (Direction::Right, self.get_block(pos + ivec3(1, 0, 0))),
-        ]
-    }
-
-    pub fn get_2(&self, pos: IVec3, offset: IVec3) -> (&BlockData, &BlockData) {
-        let first = self.get_block(pos);
-        let second = self.get_block(pos + offset);
-        (first, second)
+    pub fn get_block_in_center_chunk(&self, pos: UVec3) -> BlockId {
+        let i = vec3_to_index_in_chunk(pos);
+        self.chunks[13].get_block(i)
     }
 }

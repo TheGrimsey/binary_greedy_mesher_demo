@@ -19,7 +19,7 @@ use bevy_inspector_egui::{
 
 use bracket_noise::prelude::FastNoise;
 use new_voxel_testing::{
-    chunk::{ChunkData, ChunkGenerator, NoiseDownSampler2D, NoiseDownSampler3D},
+    chunk::{ChunkData, ChunkGenerator, IndexSize, NoiseDownSampler2D, NoiseDownSampler3D},
     constants::CHUNK_SIZE3,
     models::model::{BlockModel, Direction, ModelQuad, ModelRegistry},
     rendering::{ChunkMaterial, RenderingPlugin, TextureBuffer},
@@ -293,8 +293,8 @@ pub fn setup(
     // uncomment for scanner at origin position
     commands.spawn((
         Transform::default(),
-        Scanner::<DataScanner>::new(5, Some(5)),
-        Scanner::<MeshScanner>::new(5, Some(5)),
+        Scanner::<DataScanner>::new(13, Some(5)),
+        Scanner::<MeshScanner>::new(12, Some(5)),
     ));
 
     commands.spawn((
@@ -336,24 +336,23 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
 
     if chunk_pos.y > chunk_height_limit {
         return ChunkData {
-            voxels: vec![BlockData {
-                block_type: BlockId(0),
-            }],
+            palette: vec![BlockId(0)],
+            voxels: vec![0],
+            index_size: IndexSize::Nibble,
         };
     }
     // hardcoded extremity check
     if chunk_pos.y < -chunk_height_limit {
         return ChunkData {
-            voxels: vec![BlockData {
-                block_type: BlockId(2),
-            }],
+            palette: vec![BlockId(2)],
+            voxels: vec![0],
+            index_size: IndexSize::Nibble,
         };
     }
 
     let _span = info_span!("Generating chunk data").entered();
 
     let chunk_origin = chunk_pos * 32;
-    let mut voxels = Vec::with_capacity(CHUNK_SIZE3);
 
     let mut continental_noise = FastNoise::seeded(37);
     continental_noise.set_frequency(0.0002591);
@@ -381,6 +380,8 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
         Some(IVec3::new(0, 12, 0)),
     );
 
+    let mut voxels = Vec::with_capacity(CHUNK_SIZE3);
+
     for i in 0..CHUNK_SIZE3 {
         let voxel_pos = chunk_origin + index_to_ivec3(i);
 
@@ -402,8 +403,8 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
             },
             false => BlockId(0),
         };
-        voxels.push(BlockData { block_type });
+        voxels.push(block_type);
     }
 
-    ChunkData { voxels }
+    ChunkData::from_block_ids(&voxels)
 }

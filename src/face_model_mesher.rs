@@ -1,15 +1,16 @@
 use bevy::{asset::RenderAssetUsages, prelude::*, render::storage::ShaderStorageBuffer};
 
 use crate::{
+    chunk::LOW_NIBBLE,
     chunk_mesh::{ChunkMesh, Face},
     chunks_refs::ChunksRefs,
-    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE},
+    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE3},
     lod::Lod,
     models::{
         IndexedModel, IndexedModelRegistry,
         model::{TexturedBlockModel, VoxelTexturingType},
     },
-    utils::generate_indices,
+    utils::{generate_indices, index_to_ivec3},
     voxel::{BlockId, BlockRegistry},
 };
 
@@ -40,49 +41,69 @@ pub fn build_chunk_mesh(
 
     let mut mesh = ChunkMesh::default();
 
-    for z in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                let pos = IVec3::new(x as i32, y as i32, z as i32);
+    let mut add_voxel = |i: usize, voxel: BlockId| {
+        // Skip non-solid blocks
+        if !block_registry.has_flag(voxel, flag_to_build) {
+            return;
+        }
+        let pos = index_to_ivec3(i);
 
-                // Get the block at the current voxel position
-                let voxel = chunks_refs.get_block(pos);
+        let offset_pos = pos + IVec3::splat(CHUNK_SIZE as i32);
 
-                // Skip non-solid blocks
-                if !block_registry.has_flag(voxel.block_type, flag_to_build) {
-                    continue;
-                }
+        let mut visible_faces = 0;
+        for (i, &offset) in DIRECTION_OFFSET.iter().enumerate() {
+            let neighbor_pos = offset_pos + offset;
+            let neighbor_block = chunks_refs.get_block_pre_offset(neighbor_pos);
+            if !block_registry.has_flag(neighbor_block, cull_face_flag) {
+                visible_faces |= 1 << i;
+            }
+        }
 
-                let mut visible_faces = 0;
-                for (i, &offset) in DIRECTION_OFFSET.iter().enumerate() {
-                    let neighbor_pos = pos + offset;
-                    let neighbor_block = chunks_refs.get_block(neighbor_pos);
-                    if !block_registry.has_flag(neighbor_block.block_type, cull_face_flag) {
-                        visible_faces |= 1 << i;
-                    }
-                }
+        let textured_model = &block_registry.block_model[voxel.0 as usize];
+        let model = &model_registry.models[textured_model.model.0 as usize];
 
-                let textured_model = &block_registry.block_model[voxel.block_type.0 as usize];
-                let model = &model_registry.models[textured_model.model.0 as usize];
+        let ao = if calculate_ao {
+            let ao_directions = model.always_required_face_directions | visible_faces;
 
-                let ao = if calculate_ao {
-                    let ao_directions = model.always_required_face_directions | visible_faces;
+            compute_voxel_ao(chunks_refs, offset_pos, block_registry, ao_directions)
+        } else {
+            [0; 6]
+        };
 
-                    compute_voxel_ao(chunks_refs, pos, block_registry, ao_directions)
-                } else {
-                    [0; 6]
-                };
+        add_block_to_mesh(
+            &mut mesh,
+            visible_faces,
+            textured_model,
+            model,
+            ao,
+            i as u32,
+        );
+    };
 
-                let packed_pos = pos.x as u32 | (pos.y as u32) << 5 | (pos.z as u32) << 10;
+    let center_chunk = &chunks_refs.chunks[13];
+    match center_chunk.index_size {
+        crate::chunk::IndexSize::Nibble => {
+            for (i, &nibbles) in center_chunk.voxels.iter().enumerate() {
+                let block_a = center_chunk.palette[(nibbles & LOW_NIBBLE) as usize];
+                let block_b = center_chunk.palette[(nibbles >> 4) as usize];
 
-                add_block_to_mesh(
-                    &mut mesh,
-                    visible_faces,
-                    textured_model,
-                    model,
-                    ao,
-                    packed_pos,
-                );
+                add_voxel(i * 2, block_a);
+                add_voxel(i * 2 + 1, block_b);
+            }
+        }
+        crate::chunk::IndexSize::Byte => {
+            for (i, &byte) in center_chunk.voxels.iter().enumerate() {
+                let block = center_chunk.palette[byte as usize];
+
+                add_voxel(i, block);
+            }
+        }
+        crate::chunk::IndexSize::Short => {
+            for (i, bytes) in center_chunk.voxels.chunks_exact(2).enumerate() {
+                let bytes = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                let block = center_chunk.palette[bytes as usize];
+
+                add_voxel(i, block);
             }
         }
     }
@@ -201,8 +222,8 @@ fn compute_voxel_ao(
                 _ => unreachable!(),
             };
             let ao_voxel_pos = voxel_pos + ao_sample_offset;
-            let ao_block = chunks.get_block(ao_voxel_pos);
-            if registry.is_solid(ao_block.block_type) {
+            let ao_block = chunks.get_block_pre_offset(ao_voxel_pos);
+            if registry.is_solid(ao_block) {
                 ao_index |= 1 << ao_i;
             }
         }

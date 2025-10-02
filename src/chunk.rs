@@ -5,7 +5,7 @@ use bracket_noise::prelude::*;
 
 use crate::{
     constants::{CHUNK_SIZE, CHUNK_SIZE3},
-    voxel::BlockData,
+    voxel::BlockId,
 };
 
 #[derive(Resource)]
@@ -13,46 +13,559 @@ pub struct ChunkGenerator {
     pub generate: Arc<dyn Fn(IVec3) -> ChunkData + Send + Sync>,
 }
 
+pub const HIGH_NIBBLE: u8 = 0xF0;
+pub const LOW_NIBBLE: u8 = 0x0F;
+
 #[derive(Clone)]
 pub struct ChunkData {
-    pub voxels: Vec<BlockData>,
+    pub palette: Vec<BlockId>,
+    pub voxels: Vec<u8>,
+    pub index_size: IndexSize,
 }
 
-impl ChunkData {
-    #[inline]
-    pub fn get_block(&self, index: usize) -> &BlockData {
-        if self.voxels.len() == 1 {
-            &self.voxels[0]
-        } else {
-            &self.voxels[index]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexSize {
+    Nibble, // 4 bits
+    Byte,   // 8 bits
+    Short,  // 16 bits
+}
+impl IndexSize {
+    pub const fn max_palette_size(&self) -> usize {
+        match self {
+            IndexSize::Nibble => 16,
+            IndexSize::Byte => u8::MAX as usize + 1,
+            IndexSize::Short => u16::MAX as usize + 1,
         }
     }
 
-    /// returns the block type if all voxels are the same
-    #[inline]
-    pub fn get_block_if_filled(&self) -> Option<&BlockData> {
-        if self.voxels.len() == 1 {
-            Some(&self.voxels[0])
+    pub const fn palette_to_index_size(palette_size: usize) -> Option<IndexSize> {
+        if palette_size <= IndexSize::Nibble.max_palette_size() {
+            Some(IndexSize::Nibble)
+        } else if palette_size <= IndexSize::Byte.max_palette_size() {
+            Some(IndexSize::Byte)
+        } else if palette_size <= IndexSize::Short.max_palette_size() {
+            Some(IndexSize::Short)
         } else {
             None
         }
     }
 
-    pub fn expand_if_necessary(&mut self) {
-        if self.voxels.len() == 1 {
-            let block = self.voxels[0].clone();
-            self.voxels.resize(CHUNK_SIZE3, block);
+    pub const fn next_larger(&self) -> Option<IndexSize> {
+        match self {
+            IndexSize::Nibble => Some(IndexSize::Byte),
+            IndexSize::Byte => Some(IndexSize::Short),
+            IndexSize::Short => None,
         }
     }
-    pub fn compress_if_possible(&mut self) {
-        if self.voxels.len() > 1 {
-            let first = &self.voxels[0];
-            if self.voxels.iter().all(|b| b == first) {
-                self.voxels.truncate(1);
-                self.voxels.shrink_to_fit();
+
+    pub const fn chunk_size_in_bytes(&self) -> usize {
+        match self {
+            IndexSize::Nibble => CHUNK_SIZE3 / 2,
+            IndexSize::Byte => CHUNK_SIZE3,
+            IndexSize::Short => CHUNK_SIZE3 * 2,
+        }
+    }
+}
+
+impl ChunkData {
+    #[inline]
+    pub fn get_block(&self, index: usize) -> BlockId {
+        match self.index_size {
+            IndexSize::Nibble => {
+                if self.voxels.len() == 1 {
+                    return self.palette[self.voxels[0] as usize].clone();
+                }
+
+                let byte = self.voxels[index / 2];
+                let nibble = if index % 2 == 0 {
+                    byte & LOW_NIBBLE
+                } else {
+                    (byte >> 4) & LOW_NIBBLE
+                };
+                self.palette[nibble as usize].clone()
+            }
+            IndexSize::Byte => {
+                self.palette[self
+                    .voxels
+                    .get(index)
+                    .or(self.voxels.first())
+                    .cloned()
+                    .unwrap() as usize]
+            }
+            IndexSize::Short => {
+                let bytes = if self.voxels.len() == 2 {
+                    u16::from_ne_bytes([self.voxels[0], self.voxels[1]])
+                } else {
+                    let byte_index = index * 2;
+
+                    u16::from_ne_bytes([self.voxels[byte_index], self.voxels[byte_index + 1]])
+                };
+
+                self.palette[bytes as usize]
             }
         }
     }
+
+    /// returns the block type if all voxels are the same
+    #[inline]
+    pub fn get_block_if_filled(&self) -> Option<BlockId> {
+        match self.index_size {
+            IndexSize::Nibble => {
+                if self.voxels.len() == 1 {
+                    return Some(self.palette[(self.voxels[0] & LOW_NIBBLE) as usize].clone());
+                }
+            }
+            IndexSize::Byte => {
+                if self.voxels.len() == 1 {
+                    return Some(self.palette[self.voxels[0] as usize].clone());
+                }
+            }
+            IndexSize::Short => {
+                if self.voxels.len() == 2 {
+                    let bytes = u16::from_ne_bytes([self.voxels[0], self.voxels[1]]);
+                    return Some(self.palette[bytes as usize].clone());
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn add_to_palette(&mut self, block_id: BlockId) -> usize {
+        if let Some(palette_i) = self.palette.iter().position(|&id| id == block_id) {
+            palette_i
+        } else {
+            if self.palette.len() >= self.index_size.max_palette_size() {
+                if let Some(next_palette) = self.index_size.next_larger() {
+                    self.resize_to_fit_index(next_palette);
+                } else {
+                    panic!("Palette is full and cannot be resized further");
+                }
+            }
+
+            self.palette.push(block_id);
+            self.palette.len() - 1
+        }
+    }
+
+    pub fn set_voxel_by_palette(&mut self, index: usize, palette_index: usize) {
+        match self.index_size {
+            IndexSize::Nibble => {
+                let byte_index = index / 2;
+                let is_low_nibble = index % 2 == 0;
+
+                if is_low_nibble {
+                    self.voxels[byte_index] = (self.voxels[byte_index] & HIGH_NIBBLE)
+                        | (palette_index as u8 & LOW_NIBBLE);
+                } else {
+                    self.voxels[byte_index] = (self.voxels[byte_index] & LOW_NIBBLE)
+                        | ((palette_index as u8 & LOW_NIBBLE) << 4);
+                }
+            }
+            IndexSize::Byte => {
+                self.voxels[index] = palette_index as u8;
+            }
+            IndexSize::Short => {
+                let byte_index = index * 2;
+                let bytes = (palette_index as u16).to_ne_bytes();
+                self.voxels[byte_index] = bytes[0];
+                self.voxels[byte_index + 1] = bytes[1];
+            }
+        }
+    }
+
+    pub fn set_voxel(&mut self, index: usize, block_id: BlockId) {
+        let palette_index = self.add_to_palette(block_id);
+
+        self.set_voxel_by_palette(index, palette_index);
+    }
+
+    pub fn resize_to_fit_index(&mut self, index_size: IndexSize) {
+        if self.index_size == index_size {
+            return;
+        }
+
+        let mut new_voxels = vec![0; index_size.chunk_size_in_bytes()];
+
+        for i in 0..CHUNK_SIZE3 {
+            let palette_index = match self.index_size {
+                IndexSize::Nibble => {
+                    (if self.voxels.len() == 1 {
+                        self.voxels[0]
+                    } else {
+                        let byte = self.voxels[i / 2];
+                        if i % 2 == 0 {
+                            byte & LOW_NIBBLE
+                        } else {
+                            (byte >> 4) & LOW_NIBBLE
+                        }
+                    }) as usize
+                }
+                IndexSize::Byte => {
+                    self.voxels.get(i).or(self.voxels.first()).cloned().unwrap() as usize
+                }
+                IndexSize::Short => {
+                    if self.voxels.len() == 2 {
+                        u16::from_ne_bytes([self.voxels[0], self.voxels[1]]) as usize
+                    } else {
+                        let byte_index = i * 2;
+                        u16::from_ne_bytes([self.voxels[byte_index], self.voxels[byte_index + 1]])
+                            as usize
+                    }
+                }
+            };
+
+            match index_size {
+                IndexSize::Nibble => {
+                    let byte_index = i / 2;
+                    let is_low_nibble = i % 2 == 0;
+
+                    if is_low_nibble {
+                        new_voxels[byte_index] = (new_voxels[byte_index] & HIGH_NIBBLE)
+                            | (palette_index as u8 & LOW_NIBBLE);
+                    } else {
+                        new_voxels[byte_index] = (new_voxels[byte_index] & LOW_NIBBLE)
+                            | ((palette_index as u8 & LOW_NIBBLE) << 4);
+                    }
+                }
+                IndexSize::Byte => {
+                    new_voxels[i] = palette_index as u8;
+                }
+                IndexSize::Short => {
+                    let byte_index = i * 2;
+                    let bytes = (palette_index as u16).to_ne_bytes();
+                    new_voxels[byte_index] = bytes[0];
+                    new_voxels[byte_index + 1] = bytes[1];
+                }
+            }
+        }
+
+        self.voxels = new_voxels;
+        self.index_size = index_size;
+    }
+
+    pub fn expand_if_necessary(&mut self) {
+        match self.index_size {
+            IndexSize::Nibble => {
+                if self.voxels.len() == 1 {
+                    let block = self.voxels[0] & LOW_NIBBLE;
+
+                    let combined_block = (block << 4) | block;
+                    self.voxels[0] = combined_block;
+
+                    self.voxels.resize(CHUNK_SIZE3, combined_block);
+                }
+            }
+            IndexSize::Byte => {
+                if self.voxels.len() == 1 {
+                    let block = self.voxels[0];
+                    self.voxels.resize(CHUNK_SIZE3, block);
+                }
+            }
+            IndexSize::Short => {
+                if self.voxels.len() == 2 {
+                    let bytes = [self.voxels[0], self.voxels[1]];
+                    let block = u16::from_ne_bytes(bytes);
+                    let block_bytes = block.to_ne_bytes();
+
+                    self.voxels.resize(CHUNK_SIZE3 * 2, block_bytes[0]);
+                    for i in (1..self.voxels.len()).step_by(2) {
+                        self.voxels[i] = block_bytes[1];
+                    }
+                }
+            }
+        }
+    }
+    pub fn compress_if_possible(&mut self) {
+        let mut new_palette = Vec::new();
+        let mut index_map = vec![0; self.palette.len()];
+
+        // Find all blocks used in voxels and create a new palette.
+        match self.index_size {
+            IndexSize::Nibble => {
+                for byte in &self.voxels {
+                    let low_nibble = byte & LOW_NIBBLE;
+                    let high_nibble = (byte >> 4) & LOW_NIBBLE;
+
+                    for &nibble in &[low_nibble, high_nibble] {
+                        let idx = nibble as usize;
+                        if !new_palette.contains(&self.palette[idx]) {
+                            index_map[idx] = new_palette.len();
+                            new_palette.push(self.palette[idx]);
+                        }
+                    }
+                }
+            }
+            IndexSize::Byte => {
+                for &byte in &self.voxels {
+                    let idx = byte as usize;
+                    if !new_palette.contains(&self.palette[idx]) {
+                        index_map[idx] = new_palette.len();
+                        new_palette.push(self.palette[idx]);
+                    }
+                }
+            }
+            IndexSize::Short => {
+                for chunk in self.voxels.chunks_exact(2) {
+                    let bytes = u16::from_ne_bytes([chunk[0], chunk[1]]);
+                    let idx = bytes as usize;
+                    if !new_palette.contains(&self.palette[idx]) {
+                        index_map[idx] = new_palette.len();
+                        new_palette.push(self.palette[idx]);
+                    }
+                }
+            }
+        }
+
+        if new_palette.len() == 1 {
+            self.palette = vec![new_palette[0]];
+            self.voxels = vec![0];
+            self.index_size = IndexSize::Nibble;
+            return;
+        }
+
+        let new_index_size =
+            IndexSize::palette_to_index_size(new_palette.len()).expect("Palette too large");
+        if new_index_size == self.index_size {
+            return; // No resizing needed
+        }
+
+        let mut new_voxels = vec![0; new_index_size.chunk_size_in_bytes()];
+        match self.index_size {
+            IndexSize::Nibble => {
+                // Re-map voxel indices to new palette
+                // This is a nibble to nibble remap (guaranteed because we can't be smaller than a nibble).
+                for (i, byte) in self.voxels.iter().enumerate() {
+                    let low_nibble = byte & LOW_NIBBLE;
+                    let high_nibble = (byte >> 4) & LOW_NIBBLE;
+
+                    let new_low = index_map[low_nibble as usize] as u8 & LOW_NIBBLE;
+                    let new_high = (index_map[high_nibble as usize] as u8 & LOW_NIBBLE) << 4;
+
+                    new_voxels[i] = new_low | new_high;
+                }
+            }
+            IndexSize::Byte => match new_index_size {
+                IndexSize::Nibble => {
+                    for (i, bytes) in self.voxels.windows(2).enumerate() {
+                        let byte = bytes[0];
+                        let low_nibble = byte & LOW_NIBBLE;
+                        let high_nibble = (byte >> 4) & LOW_NIBBLE;
+
+                        let new_low = index_map[low_nibble as usize] as u8 & LOW_NIBBLE;
+                        let new_high = (index_map[high_nibble as usize] as u8 & LOW_NIBBLE) << 4;
+
+                        new_voxels[i] = new_low | new_high;
+                    }
+                }
+                IndexSize::Byte => {
+                    for (i, byte) in self.voxels.iter().enumerate() {
+                        let idx = *byte as usize;
+                        let new_idx = index_map[idx] as u8;
+                        new_voxels[i] = new_idx;
+                    }
+                }
+                IndexSize::Short => {
+                    // Can't happen, we're compressing. We can only go smaller...
+                    unreachable!()
+                }
+            },
+            IndexSize::Short => {
+                // This can go to any size...
+                match new_index_size {
+                    IndexSize::Nibble => {
+                        for (i, bytes) in self.voxels.chunks_exact(4).enumerate() {
+                            let a = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                            let b = u16::from_ne_bytes([bytes[2], bytes[3]]);
+
+                            let new_a = index_map[a as usize] as u8 & LOW_NIBBLE;
+                            let new_b = (index_map[b as usize] as u8 & LOW_NIBBLE) << 4;
+
+                            new_voxels[i] = new_a | new_b;
+                        }
+                    }
+                    IndexSize::Byte => {
+                        for (i, bytes) in self.voxels.chunks_exact(2).enumerate() {
+                            let bytes = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                            let idx = bytes as usize;
+                            let new_idx = index_map[idx] as u8;
+                            new_voxels[i] = new_idx;
+                        }
+                    }
+                    IndexSize::Short => {
+                        for (i, bytes) in self.voxels.chunks_exact(2).enumerate() {
+                            let bytes = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                            let idx = bytes as usize;
+                            let new_idx = index_map[idx] as u16;
+                            let new_bytes = new_idx.to_ne_bytes();
+                            let byte_index = i * 2;
+                            new_voxels[byte_index] = new_bytes[0];
+                            new_voxels[byte_index + 1] = new_bytes[1];
+                        }
+                    }
+                }
+            }
+        }
+
+        self.palette = new_palette;
+        self.voxels = new_voxels;
+        self.index_size = new_index_size;
+    }
+
+    pub fn from_block_ids(blocks: &[BlockId]) -> Self {
+        let _span = info_span!("ChunkData::from_block_ids").entered();
+        assert!(
+            blocks.len() == CHUNK_SIZE3 || blocks.len() == 1,
+            "Blocks array must be of length CHUNK_SIZE3 or 1"
+        );
+
+        let mut palette = Vec::new();
+
+        // Build palette & select index size
+        for block in blocks {
+            if !palette.contains(block) {
+                palette.push(*block);
+            }
+        }
+
+        if blocks.len() == 1 || palette.len() == 1 {
+            return Self {
+                palette: vec![blocks[0]],
+                voxels: vec![0],
+                index_size: IndexSize::Nibble,
+            };
+        }
+
+        let index_size = IndexSize::palette_to_index_size(palette.len())
+            .expect("Palette size exceeds maximum allowed size");
+
+        let mut voxels = vec![0; index_size.chunk_size_in_bytes()];
+
+        match index_size {
+            IndexSize::Nibble => {
+                for (i, block) in blocks.chunks_exact(2).enumerate() {
+                    let palette_index_a = palette
+                        .iter()
+                        .position(|&id| id == block[0])
+                        .expect("Block ID not found in palette")
+                        as u8;
+                    let palette_index_b = palette
+                        .iter()
+                        .position(|&id| id == block[1])
+                        .expect("Block ID not found in palette")
+                        as u8;
+
+                    voxels[i] = (palette_index_b << 4) | palette_index_a;
+                }
+            }
+            IndexSize::Byte => {
+                for (i, blocks) in blocks.iter().enumerate() {
+                    let palette_index = palette
+                        .iter()
+                        .position(|&id| id == *blocks)
+                        .expect("Block ID not found in palette");
+
+                    voxels[i] = palette_index as u8;
+                }
+            }
+            IndexSize::Short => {
+                for (i, blocks) in blocks.iter().enumerate() {
+                    let palette_index = palette
+                        .iter()
+                        .position(|&id| id == *blocks)
+                        .expect("Block ID not found in palette");
+
+                    let byte_index = i * 2;
+                    let bytes = (palette_index as u16).to_ne_bytes();
+                    voxels[byte_index] = bytes[0];
+                    voxels[byte_index + 1] = bytes[1];
+                }
+            }
+        }
+
+        Self {
+            palette,
+            voxels,
+            index_size,
+        }
+    }
+}
+
+#[test]
+fn test_chunk_data_from_blocks() {
+    let blocks = vec![BlockId(0); CHUNK_SIZE3];
+    let chunk_data = ChunkData::from_block_ids(&blocks);
+    assert_eq!(
+        chunk_data.palette.len(),
+        1,
+        "Expected chunks with a single block type to have a palette length of 1."
+    );
+    assert_eq!(
+        chunk_data.voxels.len(),
+        1,
+        "Expected chunks with a single block type to have a voxel length of 1."
+    );
+    assert_eq!(
+        chunk_data.index_size,
+        IndexSize::Nibble,
+        "Expected chunks with a single block type to use Nibble index size."
+    );
+
+    let blocks = std::iter::repeat_n([BlockId(0), BlockId(1)], CHUNK_SIZE3 / 2)
+        .flatten()
+        .collect::<Vec<_>>();
+    let chunk_data = ChunkData::from_block_ids(&blocks);
+    assert_eq!(
+        chunk_data.palette.len(),
+        2,
+        "Expected chunks with two block types to have a palette length of 2."
+    );
+    assert_eq!(
+        chunk_data.index_size,
+        IndexSize::Nibble,
+        "Expected chunks with two block types to use Nibble index size."
+    );
+    assert_eq!(
+        chunk_data.voxels.len(),
+        IndexSize::Nibble.chunk_size_in_bytes(),
+    );
+}
+
+#[test]
+fn test_palette_compress() {
+    let blocks = std::iter::repeat_n(
+        [0u16.to_ne_bytes(), 1u16.to_ne_bytes()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>(),
+        CHUNK_SIZE3 / 2,
+    )
+    .flatten()
+    .collect::<Vec<_>>();
+
+    let mut chunk_data = ChunkData {
+        palette: (0..64).map(BlockId).collect::<Vec<_>>(),
+        voxels: blocks,
+        index_size: IndexSize::Short,
+    };
+
+    chunk_data.compress_if_possible();
+
+    assert_eq!(
+        chunk_data.palette.len(),
+        2,
+        "Expected palette to be compressed to length 2."
+    );
+    assert_eq!(
+        chunk_data.index_size,
+        IndexSize::Nibble,
+        "Expected index size to be Nibble after compression."
+    );
+    assert_eq!(
+        chunk_data.voxels.len(),
+        IndexSize::Nibble.chunk_size_in_bytes(),
+        "Expected voxel data length to match Nibble index size."
+    );
 }
 
 fn bilinear_interpolation(alpha: f32, beta: f32, x00: f32, x10: f32, x01: f32, x11: f32) -> f32 {
@@ -91,17 +604,6 @@ fn test_interpolate() {
     let mut continental_noise = FastNoise::seeded(37);
     continental_noise.set_frequency(0.0002591);
 
-    /*let continental_noise_downsampler = NoiseDownSampler2D::new(1, &continental_noise, IVec2::new(0, 0), 55.0);
-
-    let n0 = continental_noise_downsampler.get_noise(IVec2::new(0, 0));
-    println!("{n0} - {}", continental_noise.get_noise(0.0, 0.0) * 55.0);
-    let n1 = continental_noise_downsampler.get_noise(IVec2::new(1, 0));
-    println!("{n1} - {}", continental_noise.get_noise(1.0, 0.0) * 55.0);
-    let n2 = continental_noise_downsampler.get_noise(IVec2::new(2, 0));
-    println!("{n2} - {}", continental_noise.get_noise(2.0, 0.0) * 55.0);
-    let n3 = continental_noise_downsampler.get_noise(IVec2::new(3, 0));
-    println!("{n3} - {}", continental_noise.get_noise(3.0, 0.0) * 55.0);*/
-
     continental_noise.set_frequency(0.0254);
     continental_noise.set_seed(388);
     let continental_noise_downsampler =
@@ -115,12 +617,6 @@ fn test_interpolate() {
         "{n1} - {}",
         continental_noise.get_noise3d(0.0, 1.0, 0.0) * 55.0
     );
-
-    //let n2 = continental_noise_downsampler.get_noise(IVec3::new(2, 0, 0));
-    //println!("{n2} - {}", continental_noise.get_noise3d(2.0, 0.0, 0.0) * 55.0);
-
-    //let n3 = continental_noise_downsampler.get_noise(IVec3::new(31, 31, 31));
-    //println!("{n3} - {} - S{}", continental_noise.get_noise3d(31.0, 31.0, 31.0) * 55.0, continental_noise_downsampler.samples.last().unwrap());
 }
 
 #[derive(Debug, Clone)]

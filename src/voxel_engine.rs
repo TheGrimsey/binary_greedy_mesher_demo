@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 
 use crate::{
     chunk::{ChunkData, ChunkGenerator},
-    constants::{CHUNK_SIZE, CHUNK_SIZE3},
+    constants::CHUNK_SIZE,
     events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded},
     lod::Lod,
     scanner::{
@@ -158,15 +158,15 @@ pub fn start_modifications(
         ..
     } = voxel_engine.as_mut();
     for (chunk_pos, mods) in chunk_modifications.drain() {
-        // say i want to load mesh now :)
         let Some(chunk_data) = world_data.get_mut(&chunk_pos) else {
             continue;
         };
+
         let new_chunk_data = Arc::make_mut(chunk_data);
         for ChunkModification(local_pos, block_type) in mods.into_iter() {
             let i = vec3_to_index_in_chunk(local_pos.as_uvec3());
             new_chunk_data.expand_if_necessary();
-            new_chunk_data.voxels[i].block_type = block_type;
+            new_chunk_data.set_voxel(i, block_type);
 
             // Add pos chunks to the modified list.
             if local_pos.x == 0 {
