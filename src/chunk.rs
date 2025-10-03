@@ -19,7 +19,7 @@ pub const LOW_NIBBLE: u8 = 0x0F;
 #[derive(Clone)]
 pub struct ChunkData {
     pub palette: Vec<BlockId>,
-    pub voxels: Vec<u8>,
+    pub voxels: Box<[u8]>,
     pub index_size: IndexSize,
 }
 
@@ -185,7 +185,7 @@ impl ChunkData {
             return;
         }
 
-        let mut new_voxels = vec![0; index_size.chunk_size_in_bytes()];
+        let mut new_voxels = vec![0; index_size.chunk_size_in_bytes()].into_boxed_slice();
 
         for i in 0..CHUNK_SIZE3 {
             let palette_index = match self.index_size {
@@ -251,15 +251,14 @@ impl ChunkData {
                     let block = self.voxels[0] & LOW_NIBBLE;
 
                     let combined_block = (block << 4) | block;
-                    self.voxels[0] = combined_block;
-
-                    self.voxels.resize(CHUNK_SIZE3, combined_block);
+                    self.voxels =
+                        vec![combined_block; self.index_size.chunk_size_in_bytes()].into();
                 }
             }
             IndexSize::Byte => {
                 if self.voxels.len() == 1 {
                     let block = self.voxels[0];
-                    self.voxels.resize(CHUNK_SIZE3, block);
+                    self.voxels = vec![block; self.index_size.chunk_size_in_bytes()].into();
                 }
             }
             IndexSize::Short => {
@@ -268,10 +267,10 @@ impl ChunkData {
                     let block = u16::from_ne_bytes(bytes);
                     let block_bytes = block.to_ne_bytes();
 
-                    self.voxels.resize(CHUNK_SIZE3 * 2, block_bytes[0]);
-                    for i in (1..self.voxels.len()).step_by(2) {
-                        self.voxels[i] = block_bytes[1];
-                    }
+                    self.voxels =
+                        std::iter::repeat_n(block_bytes, self.index_size.chunk_size_in_bytes() / 2)
+                            .flatten()
+                            .collect();
                 }
             }
         }
@@ -319,7 +318,7 @@ impl ChunkData {
 
         if new_palette.len() == 1 {
             self.palette = vec![new_palette[0]];
-            self.voxels = vec![0];
+            self.voxels = [0].into();
             self.index_size = IndexSize::Nibble;
             return;
         }
@@ -330,7 +329,7 @@ impl ChunkData {
             return; // No resizing needed
         }
 
-        let mut new_voxels = vec![0; new_index_size.chunk_size_in_bytes()];
+        let mut new_voxels = vec![0; new_index_size.chunk_size_in_bytes()].into_boxed_slice();
         match self.index_size {
             IndexSize::Nibble => {
                 // Re-map voxel indices to new palette
@@ -431,7 +430,7 @@ impl ChunkData {
         if blocks.len() == 1 || palette.len() == 1 {
             return Self {
                 palette: vec![blocks[0]],
-                voxels: vec![0],
+                voxels: [0].into(),
                 index_size: IndexSize::Nibble,
             };
         }
@@ -439,7 +438,7 @@ impl ChunkData {
         let index_size = IndexSize::palette_to_index_size(palette.len())
             .expect("Palette size exceeds maximum allowed size");
 
-        let mut voxels = vec![0; index_size.chunk_size_in_bytes()];
+        let mut voxels = vec![0; index_size.chunk_size_in_bytes()].into_boxed_slice();
 
         match index_size {
             IndexSize::Nibble => {
@@ -541,7 +540,7 @@ fn test_palette_compress() {
         CHUNK_SIZE3 / 2,
     )
     .flatten()
-    .collect::<Vec<_>>();
+    .collect();
 
     let mut chunk_data = ChunkData {
         palette: (0..64).map(BlockId).collect::<Vec<_>>(),

@@ -337,7 +337,7 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     if chunk_pos.y > chunk_height_limit {
         return ChunkData {
             palette: vec![BlockId(0)],
-            voxels: vec![0],
+            voxels: [0].into(),
             index_size: IndexSize::Nibble,
         };
     }
@@ -345,7 +345,7 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
     if chunk_pos.y < -chunk_height_limit {
         return ChunkData {
             palette: vec![BlockId(2)],
-            voxels: vec![0],
+            voxels: [0].into(),
             index_size: IndexSize::Nibble,
         };
     }

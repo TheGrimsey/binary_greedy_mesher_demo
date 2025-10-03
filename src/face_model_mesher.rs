@@ -4,7 +4,7 @@ use crate::{
     chunk::LOW_NIBBLE,
     chunk_mesh::{ChunkMesh, Face},
     chunks_refs::ChunksRefs,
-    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE3},
+    constants::{ADJACENT_AO_DIRS, CHUNK_SIZE},
     lod::Lod,
     models::{
         IndexedModel, IndexedModelRegistry,
