@@ -586,6 +586,7 @@ pub fn join_mesh(
     mut materials: ResMut<Assets<ChunkMaterial>>,
     shared_material_buffers: Res<SharedMaterialBuffers>,
     texture_buffer: Res<TextureBuffer>,
+    desired_meshes: Res<GlobalScannerDesiredChunks<MeshScanner>>,
 ) {
     let MeshingPipeline {
         mesh_tasks,
@@ -606,6 +607,11 @@ pub fn join_mesh(
             *task_option = Some(task);
             continue;
         };
+
+        if !desired_meshes.chunks.contains(world_pos) {
+            // No longer desired, skip building the mesh.
+            continue;
+        }
 
         // Despawn the old chunk entity if it exists.
         // Checking before we check the mesh because we may not get a mesh.
