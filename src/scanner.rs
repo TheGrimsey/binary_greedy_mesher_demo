@@ -38,8 +38,8 @@ impl<T: Send + Sync + Default + 'static> Plugin for ScannerPlugin<T> {
                 .run_if(any_with_component::<Scanner<T>>.or(any_component_removed::<Scanner<T>>)),
         );
 
-        app.add_event::<ChunkGainedScannerRelevance<T>>()
-            .add_event::<ChunkLostScannerRelevance<T>>();
+        app.add_message::<ChunkGainedScannerRelevance<T>>()
+            .add_message::<ChunkLostScannerRelevance<T>>();
     }
 }
 
@@ -99,13 +99,13 @@ pub struct MeshScanner;
 #[derive(Default)]
 pub struct DataScanner;
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct ChunkGainedScannerRelevance<T: Send + Sync + Default + 'static> {
     pub chunk: IVec3,
     phantom_data: PhantomData<T>,
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct ChunkLostScannerRelevance<T: Send + Sync + Default + 'static> {
     pub chunk: IVec3,
     phantom_data: PhantomData<T>,
@@ -116,8 +116,8 @@ pub fn scan<T: Send + Sync + Default + 'static>(
     scanners: Query<(&Scanner<T>, &ChunkPos)>,
     mut global_desired_chunks: ResMut<GlobalScannerDesiredChunks<T>>,
     mut current_desired_chunks: Local<HashSet<IVec3>>,
-    mut gained_relevance_events: EventWriter<ChunkGainedScannerRelevance<T>>,
-    mut lost_relevance_events: EventWriter<ChunkLostScannerRelevance<T>>,
+    mut gained_relevance_events: MessageWriter<ChunkGainedScannerRelevance<T>>,
+    mut lost_relevance_events: MessageWriter<ChunkLostScannerRelevance<T>>,
     mut removed_scanners: RemovedComponents<Scanner<T>>,
 ) {
     if any_changed_query.is_empty() && removed_scanners.read().next().is_none() {

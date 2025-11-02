@@ -24,17 +24,11 @@
 #import bevy_pbr::pbr_types::{pbr_input_new, STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT};
 #import bevy_pbr::prepass_utils
 
-struct ChunkMaterial {
-    reflectance: vec3<f32>,
-    perceptual_roughness: f32,
-    metallic: f32,
-};
 
-@group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
-@group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
-@group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
-@group(2) @binding(3) var textures: binding_array<texture_2d<f32>>;
-@group(2) @binding(4) var nearest_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage, read> model_buffer: array<ModelQuad>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: array<Face>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(2) var textures: binding_array<texture_2d<f32>>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(3) var nearest_sampler: sampler;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -155,9 +149,9 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.material.base_color = vec4(color.xyz * input.ambient, color.w);
     //pbr_input.material.emissive = input.blend_emissive;
 
-    pbr_input.material.reflectance = chunk_material.reflectance;
-    pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;
-    pbr_input.material.metallic = chunk_material.metallic;
+    pbr_input.material.reflectance = vec3(0.5, 0.5, 0.5);
+    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.metallic = 0.01;
 
 
 #ifdef PREPASS_PIPELINE

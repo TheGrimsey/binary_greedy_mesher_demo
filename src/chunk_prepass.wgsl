@@ -16,14 +16,6 @@
 #import bevy_pbr::mesh_functions::{mesh_normal_local_to_world}
 #import bevy_render::instance_index::{get_instance_index}
 
-
-struct ChunkMaterial {
-    reflectance: f32,
-    perceptual_roughness: f32,
-    metallic: f32,
-    // _padding: f32,
-};
-
 struct Face {
     /// Block Position: X,Y,Z - 5 bits each (0-31)
     /// AO - 2 bits * 8 (one for each corner of the voxel)
@@ -46,9 +38,8 @@ struct ModelQuad {
     ao: u32
 }
 
-@group(2) @binding(0) var<uniform> material: ChunkMaterial;
-@group(2) @binding(1) var<storage, read> model_buffer: array<ModelQuad>;
-@group(2) @binding(2) var<storage, read> face_buffer: array<Face>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage, read> model_buffer: array<ModelQuad>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: array<Face>;
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -132,6 +123,18 @@ fn fragment(in: MyVertexOutput) -> FragmentOutput {
     out.deferred = vec4(0u, bevy_pbr::rgb9e5::vec3_to_rgb9e5_(vec3(1.0, 0.0, 1.0)), 0u, 0u);
     out.deferred_lighting_pass_id = 1u;
 #endif
+
+    return out;
+}
+#else
+
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+};
+
+@fragment
+fn fragment(in: MyVertexOutput) -> FragmentOutput {
+    var out: FragmentOutput;
 
     return out;
 }

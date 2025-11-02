@@ -11,8 +11,8 @@ use indexmap::IndexSet;
 use crate::{
     chunk::{ChunkData, ChunkGenerator},
     constants::CHUNK_SIZE,
-    events::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded},
     lod::Lod,
+    messages::{ChunkEventsPlugin, ChunkGenerated, ChunkModified, ChunkUnloaded},
     scanner::{
         ChunkGainedScannerRelevance, ChunkLostScannerRelevance, ChunkPos, ChunkTrackerPlugin,
         DataScanner, MeshScanner, Scanner, ScannerPlugin, scan,
@@ -81,7 +81,7 @@ impl Default for VoxelEngine {
 pub fn start_data_tasks(
     mut voxel_engine: ResMut<VoxelEngine>,
     scanners: Query<&ChunkPos, With<Scanner<DataScanner>>>,
-    mut chunk_gained_data_relevance: EventReader<ChunkGainedScannerRelevance<DataScanner>>,
+    mut chunk_gained_data_relevance: MessageReader<ChunkGainedScannerRelevance<DataScanner>>,
     chunk_generator: Res<ChunkGenerator>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
@@ -126,8 +126,8 @@ pub fn start_data_tasks(
 /// destroy enqueued, chunk data
 pub fn unload_data(
     mut voxel_engine: ResMut<VoxelEngine>,
-    mut events: EventWriter<ChunkUnloaded>,
-    mut chunk_lost_data_relevance: EventReader<ChunkLostScannerRelevance<DataScanner>>,
+    mut events: MessageWriter<ChunkUnloaded>,
+    mut chunk_lost_data_relevance: MessageReader<ChunkLostScannerRelevance<DataScanner>>,
 ) {
     let VoxelEngine {
         unload_data_queue,
@@ -149,7 +149,7 @@ pub fn unload_data(
 // start
 pub fn start_modifications(
     mut voxel_engine: ResMut<VoxelEngine>,
-    mut events: EventWriter<ChunkModified>,
+    mut events: MessageWriter<ChunkModified>,
     mut updated_and_adjecant_chunks_set: Local<HashSet<IVec3>>,
 ) {
     let VoxelEngine {
@@ -194,7 +194,7 @@ pub fn start_modifications(
 }
 
 /// join the chunkdata threads
-pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>, mut events: EventWriter<ChunkGenerated>) {
+pub fn join_data(mut voxel_engine: ResMut<VoxelEngine>, mut events: MessageWriter<ChunkGenerated>) {
     let VoxelEngine {
         world_data,
         data_tasks,

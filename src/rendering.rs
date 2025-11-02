@@ -1,27 +1,26 @@
 use std::{num::NonZero, sync::Arc};
 
 use bevy::{
-    asset::{RenderAssetUsages, load_internal_asset, weak_handle},
+    asset::{RenderAssetUsages, load_internal_asset, uuid_handle},
     ecs::system::{SystemParamItem, lifetimeless::SRes},
+    mesh::MeshVertexBufferLayoutRef,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     platform::collections::HashMap,
     prelude::*,
     render::{
-        mesh::MeshVertexBufferLayoutRef,
         render_asset::RenderAssets,
         render_resource::{
             AsBindGroup, AsBindGroupError, BindGroupEntries, BindGroupLayout,
-            BindGroupLayoutEntries, BindGroupLayoutEntry, BindingResources, BufferInitDescriptor,
-            BufferUsages, PolygonMode, PreparedBindGroup, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderRef, ShaderStages, ShaderType, SpecializedMeshPipelineError,
-            TextureSampleType, UnpreparedBindGroup,
-            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d, uniform_buffer},
-            encase::UniformBuffer,
+            BindGroupLayoutEntries, BindGroupLayoutEntry, BindingResources, PolygonMode,
+            PreparedBindGroup, RenderPipelineDescriptor, SamplerBindingType, ShaderStages,
+            SpecializedMeshPipelineError, TextureSampleType, UnpreparedBindGroup,
+            binding_types::{sampler, storage_buffer_read_only_sized, texture_2d},
         },
         renderer::RenderDevice,
         storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
         texture::{FallbackImage, GpuImage},
     },
+    shader::ShaderRef,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
 use indexmap::IndexSet;
@@ -30,7 +29,7 @@ use crate::{
     chunk_mesh::{ATTRIBUTE_VOXEL, ChunkMesh},
     chunks_refs::ChunksRefs,
     constants::ADJACENT_CHUNK_DIRECTIONS,
-    events::ChunkModified,
+    messages::ChunkModified,
     models::{
         IndexedModel, IndexedModelRegistry, IndexedModelRegistryResource, QuadRange,
         model::{DIRECTIONS, ModelRegistry},
@@ -44,9 +43,9 @@ use crate::{
 };
 
 pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
-    weak_handle!("f4cc2d00-78bd-4d79-a803-3f5147cb6606");
+    uuid_handle!("f4cc2d00-78bd-4d79-a803-3f5147cb6606");
 pub const CHUNK_PREPASS_HANDLE: Handle<Shader> =
-    weak_handle!("97a77bda-9a7c-4a3b-8800-15a5f5198777");
+    uuid_handle!("97a77bda-9a7c-4a3b-8800-15a5f5198777");
 
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
@@ -169,26 +168,8 @@ pub enum ChunkEntityType {
 const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGPU!!!! Very annoying :(
 // Mac only supports 128.
 
-#[derive(Reflect, ShaderType, Debug, Clone, Copy)]
-pub struct MaterialProperties {
-    pub reflectance: Vec3,
-    pub perceptual_roughness: f32,
-    pub metallic: f32,
-}
-impl Default for MaterialProperties {
-    fn default() -> Self {
-        MaterialProperties {
-            reflectance: Vec3::splat(0.5),
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
-        }
-    }
-}
-
 #[derive(Asset, Reflect, Debug, Clone)]
 pub struct ChunkMaterial {
-    pub properties: MaterialProperties,
-
     pub model_buffer: Handle<ShaderStorageBuffer>,
 
     pub face_buffer: Handle<ShaderStorageBuffer>,
@@ -211,7 +192,7 @@ impl Material for ChunkMaterial {
     }
 
     fn specialize(
-        _pipeline: &MaterialPipeline<Self>,
+        _pipeline: &MaterialPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
@@ -246,17 +227,8 @@ impl AsBindGroup for ChunkMaterial {
         layout: &BindGroupLayout,
         render_device: &RenderDevice,
         (storage_buffers, image_assets, fallback_image): &mut SystemParamItem<'_, '_, Self::Param>,
-    ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
+    ) -> Result<PreparedBindGroup, AsBindGroupError> {
         // retrieve the render resources from handles
-
-        let mut properties_buffer = UniformBuffer::new(Vec::new());
-        properties_buffer.write(&self.properties).unwrap();
-
-        let properties_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            contents: properties_buffer.as_ref(),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
 
         let Some(model_buffer) = storage_buffers.get(&self.model_buffer) else {
             return Err(AsBindGroupError::RetryNextUpdate);
@@ -300,7 +272,6 @@ impl AsBindGroup for ChunkMaterial {
             "chunk_material_bind_group",
             layout,
             &BindGroupEntries::sequential((
-                properties_buffer.as_entire_buffer_binding(),
                 model_buffer,
                 face_buffer,
                 &textures[..],
@@ -311,9 +282,10 @@ impl AsBindGroup for ChunkMaterial {
         Ok(PreparedBindGroup {
             bindings: BindingResources(vec![]),
             bind_group,
-            data: (),
         })
     }
+
+    fn bind_group_data(&self) -> Self::Data {}
 
     fn unprepared_bind_group(
         &self,
@@ -321,7 +293,7 @@ impl AsBindGroup for ChunkMaterial {
         _render_device: &RenderDevice,
         _param: &mut SystemParamItem<'_, '_, Self::Param>,
         _force_no_bindless: bool,
-    ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+    ) -> Result<UnpreparedBindGroup, AsBindGroupError> {
         Err(AsBindGroupError::CreateBindGroupDirectly)
     }
 
@@ -335,22 +307,17 @@ impl AsBindGroup for ChunkMaterial {
             (
                 (
                     0,
-                    // Properties buffer
-                    uniform_buffer::<MaterialProperties>(false),
-                ),
-                (
-                    1,
                     // Model buffer
                     storage_buffer_read_only_sized(false, None),
                 ),
                 (
-                    2,
+                    1,
                     // Face buffer
                     storage_buffer_read_only_sized(false, None),
                 ),
                 // Voxel texture array
                 (
-                    3,
+                    2,
                     texture_2d(TextureSampleType::Float { filterable: true })
                         .count(NonZero::<u32>::new(MAX_TEXTURE_COUNT as u32).unwrap()),
                 ),
@@ -368,7 +335,7 @@ impl AsBindGroup for ChunkMaterial {
                 //
                 // One may need to pay attention to the limit of sampler binding
                 // amount on some platforms.
-                (4, sampler(SamplerBindingType::Filtering)),
+                (3, sampler(SamplerBindingType::Filtering)),
             ),
         )
         .to_vec()
@@ -405,7 +372,7 @@ impl Material for ChunkMaterialWireframe {
     }
 
     fn specialize(
-        _pipeline: &MaterialPipeline<Self>,
+        _pipeline: &MaterialPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,
@@ -453,8 +420,8 @@ pub fn start_mesh_tasks(
     scanners: Query<&ChunkPos, With<Scanner<MeshScanner>>>,
     block_registry: Res<BlockRegistryResource>,
     model_registry: Res<IndexedModelRegistryResource>,
-    mut chunk_gained_mesh_relevance: EventReader<ChunkGainedScannerRelevance<MeshScanner>>,
-    mut chunk_modified: EventReader<ChunkModified>,
+    mut chunk_gained_mesh_relevance: MessageReader<ChunkGainedScannerRelevance<MeshScanner>>,
+    mut chunk_modified: MessageReader<ChunkModified>,
     global_mesh_scanner_chunks: Res<GlobalScannerDesiredChunks<MeshScanner>>,
 ) {
     let task_pool = AsyncComputeTaskPool::get();
@@ -550,7 +517,7 @@ pub fn unload_mesh(
     mut commands: Commands,
     mut mesh_pipeline: ResMut<MeshingPipeline>,
     mut chunk_mesh_entities: ResMut<ChunkMeshEntities>,
-    mut chunk_lost_mesh_relevance: EventReader<ChunkLostScannerRelevance<MeshScanner>>,
+    mut chunk_lost_mesh_relevance: MessageReader<ChunkLostScannerRelevance<MeshScanner>>,
 ) {
     let MeshingPipeline {
         unload_mesh_queue,
@@ -593,8 +560,6 @@ pub fn join_mesh(
         vertex_diagnostic,
         ..
     } = mesh_pipeline.as_mut();
-
-    let properties = MaterialProperties::default();
 
     for (world_pos, task_option) in mesh_tasks.iter_mut() {
         let Some(mut task) = task_option.take() else {
@@ -649,7 +614,6 @@ pub fn join_mesh(
                     aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(materials.add(ChunkMaterial {
-                        properties,
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Opaque,
@@ -677,7 +641,6 @@ pub fn join_mesh(
                     aabb,
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(materials.add(ChunkMaterial {
-                        properties,
                         model_buffer: shared_material_buffers.model_buffer.clone(),
                         face_buffer,
                         alpha_mode: AlphaMode::Premultiplied,

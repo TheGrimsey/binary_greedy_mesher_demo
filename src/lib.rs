@@ -2,9 +2,9 @@ pub mod chunk;
 pub mod chunk_mesh;
 pub mod chunks_refs;
 pub mod constants;
-pub mod events;
 pub mod face_model_mesher;
 pub mod lod;
+pub mod messages;
 pub mod models;
 pub mod quad;
 #[cfg(feature = "rendering")]

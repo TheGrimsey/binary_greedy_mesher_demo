@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use bevy::{
     color::palettes::css,
+    light::CascadeShadowConfigBuilder,
     math::U8Vec3,
-    pbr::CascadeShadowConfigBuilder,
     platform::collections::HashMap,
     prelude::*,
     render::{
@@ -399,7 +399,7 @@ pub fn generate(chunk_pos: IVec3) -> ChunkData {
                 // Distance from surface
                 y if y > 3.0 => BlockId(4), // Stone
                 y if y > 1.0 => BlockId(1), // Dirt
-                _ => BlockId(2),            // Grass
+                _ => BlockId(3),            // Glass
             },
             false => BlockId(0),
         };

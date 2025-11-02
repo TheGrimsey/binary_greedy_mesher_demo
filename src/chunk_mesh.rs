@@ -1,11 +1,9 @@
 use bevy::{
     asset::RenderAssetUsages,
+    camera::primitives::Aabb,
     math::IVec3,
-    render::{
-        mesh::{Indices, Mesh, MeshVertexAttribute, PrimitiveTopology},
-        primitives::Aabb,
-        render_resource::{ShaderType, VertexFormat},
-    },
+    mesh::{Indices, Mesh, MeshVertexAttribute, PrimitiveTopology},
+    render::render_resource::{ShaderType, VertexFormat},
 };
 
 use crate::utils::get_pos_from_vertex_u32;

@@ -10,17 +10,17 @@ default = ["rendering"]
 rendering = ["bevy/bevy_pbr", "bevy/bevy_asset"]
 
 [dependencies]
-bevy = { version = "0.16", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
     "multi_threaded",
 ] }
 bracket-noise = "0.8.7"
 indexmap = "2.7.1"
 
 [dev-dependencies]
-bevy = { version = "0.16" }
+bevy = { version = "0.17" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
-bevy_flycam = "0.16"
-bevy-inspector-egui = "0.32"
+bevy_flycam = "0.17"
+bevy-inspector-egui = "0.35"
 rand = "0.9"
 rand_chacha = "0.9"
 
