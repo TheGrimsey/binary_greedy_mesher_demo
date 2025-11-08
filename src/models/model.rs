@@ -2,7 +2,6 @@ use bevy::{
     ecs::resource::Resource,
     math::{Vec2, Vec3},
     platform::collections::HashMap,
-    render::render_resource::ShaderType,
 };
 
 pub const AO_CORNERS: [[i32; 3]; 8] = [
@@ -25,7 +24,11 @@ const REMAP_CORNERS: [[u8; 4]; 6] = [
     [0, 3, 1, 2], // -Z
 ];
 
-#[derive(ShaderType, Clone, Debug)]
+#[cfg_attr(
+    feature = "rendering",
+    derive(bevy::render::render_resource::ShaderType)
+)]
+#[derive(Clone, Debug)]
 pub struct ModelQuad {
     pub positions: [Vec3; 4],
     pub uv: [Vec2; 4],

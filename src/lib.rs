@@ -1,7 +1,9 @@
 pub mod chunk;
+#[cfg(feature = "rendering")]
 pub mod chunk_mesh;
 pub mod chunks_refs;
 pub mod constants;
+#[cfg(feature = "rendering")]
 pub mod face_model_mesher;
 pub mod lod;
 pub mod messages;
