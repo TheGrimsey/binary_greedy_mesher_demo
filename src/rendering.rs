@@ -47,8 +47,6 @@ pub const CHUNK_SHADER_HANDLE: Handle<Shader> =
 pub const CHUNK_PREPASS_HANDLE: Handle<Shader> =
     uuid_handle!("97a77bda-9a7c-4a3b-8800-15a5f5198777");
 
-pub const OVERLAY_HANDLE: Handle<Shader> = uuid_handle!("f4cc2d01-78bd-4d79-a803-3f5147cb6606");
-
 #[derive(Resource)]
 pub enum ChunkMaterialWireframeMode {
     On,
@@ -76,8 +74,6 @@ impl Plugin for RenderingPlugin {
             "chunk_prepass.wgsl",
             Shader::from_wgsl
         );
-
-        load_internal_asset!(app, OVERLAY_HANDLE, "block_overlay.wgsl", Shader::from_wgsl);
 
         app.add_systems(
             PostUpdate,
@@ -188,7 +184,7 @@ impl Material for ChunkMaterial {
         CHUNK_SHADER_HANDLE.into()
     }
     fn fragment_shader() -> ShaderRef {
-        OVERLAY_HANDLE.into()
+        CHUNK_SHADER_HANDLE.into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
