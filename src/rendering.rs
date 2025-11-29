@@ -79,6 +79,8 @@ impl Plugin for RenderingPlugin {
             PostUpdate,
             (join_mesh, unload_mesh, start_mesh_tasks.after(join_data)).chain(),
         );
+
+        app.add_message::<MeshGeneratedMessage>();
     }
 }
 
@@ -543,6 +545,12 @@ pub fn unload_mesh(
     }
 }
 
+#[derive(Debug, Message)]
+pub struct MeshGeneratedMessage {
+    chunk: IVec3,
+    any_mesh_created: bool,
+}
+
 /// join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
 pub fn join_mesh(
     mut shader_storage_buffers: ResMut<Assets<ShaderStorageBuffer>>,
@@ -554,6 +562,7 @@ pub fn join_mesh(
     shared_material_buffers: Res<SharedMaterialBuffers>,
     texture_buffer: Res<TextureBuffer>,
     desired_meshes: Res<GlobalScannerDesiredChunks<MeshScanner>>,
+    mut mesh_generated: MessageWriter<MeshGeneratedMessage>,
 ) {
     let MeshingPipeline {
         mesh_tasks,
@@ -597,6 +606,9 @@ pub fn join_mesh(
                 Name::new(format!("Chunk: {:?}", world_pos)),
             ));
             chunk_mesh_entities.0.insert(*world_pos, chunk_entity.id());
+
+            let any_mesh =
+                chunk_mesh_task.opaque.is_some() || chunk_mesh_task.transparent.is_some();
 
             if let Some(mesh) = chunk_mesh_task.opaque.take() {
                 total_vertex_count += mesh.faces.len() * 4;
@@ -650,6 +662,11 @@ pub fn join_mesh(
                     Name::new("Transparent"),
                 ));
             }
+
+            mesh_generated.write(MeshGeneratedMessage {
+                chunk: *world_pos,
+                any_mesh_created: any_mesh,
+            });
         }
 
         vertex_diagnostic.insert(*world_pos, total_vertex_count as i32);
