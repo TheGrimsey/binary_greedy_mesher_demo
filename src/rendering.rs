@@ -547,8 +547,9 @@ pub fn unload_mesh(
 
 #[derive(Debug, Message)]
 pub struct MeshGeneratedMessage {
-    chunk: IVec3,
-    any_mesh_created: bool,
+    pub chunk: IVec3,
+    /// Whether any mesh (opaque or transparent) was created for this chunk.
+    pub any_mesh_created: bool,
 }
 
 /// join the multithreaded chunk mesh tasks, and construct a finalized chunk entity
