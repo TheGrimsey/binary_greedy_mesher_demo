@@ -178,9 +178,9 @@ const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGP
 /// Max number of face buffers per material.
 ///
 /// Using 64 because we can mark empty ones as bits in a u64.
-const MAX_FACE_BUFFERS: u32 = 64;
+const MAX_FACE_BUFFERS: u32 = ChunkStateBitset::BITS;
 
-type ChunkStateBitset = u64;
+type ChunkStateBitset = u128;
 
 #[derive(Clone, Copy, Debug)]
 struct ChunkFaceState(ChunkStateBitset);
