@@ -2,8 +2,12 @@ use std::{num::NonZero, sync::Arc};
 
 use bevy::{
     asset::{RenderAssetUsages, load_internal_asset, uuid_handle},
-    ecs::system::{SystemParamItem, lifetimeless::SRes},
-    mesh::MeshVertexBufferLayoutRef,
+    ecs::{
+        lifecycle::HookContext,
+        system::{SystemParamItem, lifetimeless::SRes},
+        world::DeferredWorld,
+    },
+    mesh::{MeshTag, MeshVertexBufferLayoutRef},
     pbr::{MaterialPipeline, MaterialPipelineKey},
     platform::collections::HashMap,
     prelude::*,
@@ -62,7 +66,8 @@ impl Plugin for RenderingPlugin {
         app.insert_resource(ChunkMaterialWireframeMode::Off);
 
         app.init_resource::<MeshingPipeline>()
-            .init_resource::<ChunkMeshEntities>();
+            .init_resource::<ChunkMeshEntities>()
+            .init_resource::<ChunkMaterials>();
 
         app.add_systems(PostStartup, initialize_global_material_buffers);
 
@@ -170,11 +175,113 @@ pub enum ChunkEntityType {
 const MAX_TEXTURE_COUNT: usize = 128; // There's no true texture arrays :( WebGPU!!!! Very annoying :(
 // Mac only supports 128.
 
+/// Max number of face buffers per material.
+///
+/// Using 64 because we can mark empty ones as bits in a u64.
+const MAX_FACE_BUFFERS: u32 = 64;
+
+type ChunkStateBitset = u64;
+
+#[derive(Clone, Copy, Debug)]
+struct ChunkFaceState(ChunkStateBitset);
+impl ChunkFaceState {
+    fn allocate_slot(&mut self) -> Option<usize> {
+        // Count to the first zero bit in the u64.
+        let first_zero_bit = self.0.trailing_ones();
+
+        if first_zero_bit < ChunkStateBitset::BITS {
+            self.0 |= 1 << first_zero_bit;
+            return Some(first_zero_bit as usize);
+        }
+
+        None
+    }
+
+    fn free_slot(&mut self, slot: usize) {
+        self.0 &= !(1 << slot);
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct ChunkMaterials {
+    /// Slots in the face buffer array that are used by opaque materials.
+    ///
+    /// A bit set means the slot is used.
+    opaque_states: Vec<ChunkFaceState>,
+
+    opaques: Vec<Handle<ChunkMaterial>>,
+
+    transparent_states: Vec<ChunkFaceState>,
+    transparents: Vec<Handle<ChunkMaterial>>,
+}
+impl ChunkMaterials {
+    /// Allocate a material slot for a chunk.
+    /// Returns the slot index and the material handle.
+    ///
+    /// User must insert face buffer into the material's face buffer slot.
+    fn allocate_slot(&mut self, is_opaque: bool) -> Option<(usize, Handle<ChunkMaterial>, usize)> {
+        let (states, materials) = if is_opaque {
+            (&mut self.opaque_states, &mut self.opaques)
+        } else {
+            (&mut self.transparent_states, &mut self.transparents)
+        };
+
+        for (index, state) in states.iter_mut().enumerate() {
+            if let Some(slot) = state.allocate_slot() {
+                return Some((slot, materials[index].clone(), index));
+            }
+        }
+
+        None
+    }
+
+    fn free_slot(&mut self, is_opaque: bool, index: usize, slot: usize) -> Handle<ChunkMaterial> {
+        let (states, materials) = if is_opaque {
+            (&mut self.opaque_states, &mut self.opaques)
+        } else {
+            (&mut self.transparent_states, &mut self.transparents)
+        };
+
+        states[index].free_slot(slot);
+
+        materials[index].clone()
+    }
+}
+
+#[derive(Component, Clone)]
+#[component(on_remove=empty_slot_on_remove)]
+struct ChunkMaterialKey {
+    is_opaque: bool,
+    slot: u8,
+    material: u16,
+}
+
+fn empty_slot_on_remove(mut world: DeferredWorld, ctx: HookContext) {
+    let key = world.get::<ChunkMaterialKey>(ctx.entity).unwrap().clone();
+
+    let mut materials = world.resource_mut::<ChunkMaterials>();
+    materials.free_slot(key.is_opaque, key.material as usize, key.slot as usize);
+
+    let handle = if key.is_opaque {
+        &materials.opaques[key.material as usize]
+    } else {
+        &materials.transparents[key.material as usize]
+    }
+    .id();
+
+    let mut chunk_materials = world.resource_mut::<Assets<ChunkMaterial>>();
+
+    if let Some(material) = chunk_materials.get_mut(handle) {
+        material.face_buffers[key.slot as usize] = Handle::default();
+    }
+}
+
 #[derive(Asset, Reflect, Debug, Clone)]
 pub struct ChunkMaterial {
     pub model_buffer: Handle<ShaderStorageBuffer>,
 
-    pub face_buffer: Handle<ShaderStorageBuffer>,
+    /// All the face buffers used by this material.
+    pub face_buffers: Vec<Handle<ShaderStorageBuffer>>,
 
     pub textures: Arc<[Handle<Image>]>,
 
@@ -238,10 +345,28 @@ impl AsBindGroup for ChunkMaterial {
 
         let model_buffer = model_buffer.buffer.as_entire_buffer_binding();
 
-        let Some(face_buffer) = storage_buffers.get(&self.face_buffer) else {
-            return Err(AsBindGroupError::RetryNextUpdate);
-        };
-        let face_buffer = face_buffer.buffer.as_entire_buffer_binding();
+        let fallback_buffer = self
+            .face_buffers
+            .iter()
+            .find_map(|s| storage_buffers.get(s))
+            .ok_or(AsBindGroupError::RetryNextUpdate)?
+            .buffer
+            .as_entire_buffer_binding();
+
+        let mut face_buffers =
+            std::iter::repeat_n(fallback_buffer, MAX_FACE_BUFFERS as usize).collect::<Vec<_>>();
+
+        for (i, handle) in self
+            .face_buffers
+            .iter()
+            .take(MAX_FACE_BUFFERS as usize)
+            .enumerate()
+        {
+            match storage_buffers.get(handle) {
+                Some(buffer) => face_buffers[i] = buffer.buffer.as_entire_buffer_binding(),
+                None => continue,
+            }
+        }
 
         let mut images = vec![];
         for handle in self.textures.iter().take(MAX_TEXTURE_COUNT) {
@@ -275,8 +400,8 @@ impl AsBindGroup for ChunkMaterial {
             layout,
             &BindGroupEntries::sequential((
                 model_buffer,
-                face_buffer,
-                &textures[..],
+                face_buffers.as_slice(),
+                textures.as_slice(),
                 fallback_sampler,
             )),
         );
@@ -315,7 +440,8 @@ impl AsBindGroup for ChunkMaterial {
                 (
                     1,
                     // Face buffer
-                    storage_buffer_read_only_sized(false, None),
+                    storage_buffer_read_only_sized(false, None)
+                        .count(NonZero::<u32>::new(MAX_FACE_BUFFERS).unwrap()),
                 ),
                 // Voxel texture array
                 (
@@ -564,6 +690,7 @@ pub fn join_mesh(
     texture_buffer: Res<TextureBuffer>,
     desired_meshes: Res<GlobalScannerDesiredChunks<MeshScanner>>,
     mut mesh_generated: MessageWriter<MeshGeneratedMessage>,
+    mut chunk_materials: ResMut<ChunkMaterials>,
 ) {
     let MeshingPipeline {
         mesh_tasks,
@@ -623,17 +750,48 @@ pub fn join_mesh(
 
                 let face_buffer = shader_storage_buffers.add(face_buffer);
 
+                let (slot, material, material_index) = if let Some((slot, handle, material_index)) =
+                    chunk_materials.allocate_slot(true)
+                {
+                    let chunk_material = materials.get_mut(handle.id()).unwrap();
+
+                    if chunk_material.face_buffers.len() < (slot + 1) {
+                        chunk_material
+                            .face_buffers
+                            .resize(slot + 1, Handle::default());
+                    }
+
+                    chunk_material.face_buffers[slot] = face_buffer.clone();
+
+                    (slot, handle, material_index)
+                } else {
+                    let new_material = ChunkMaterial {
+                        model_buffer: shared_material_buffers.model_buffer.clone(),
+                        face_buffers: vec![face_buffer.clone()],
+                        alpha_mode: AlphaMode::Opaque,
+                        textures: texture_buffer.0.clone(),
+                    };
+
+                    let handle = materials.add(new_material);
+
+                    chunk_materials.opaque_states.push(ChunkFaceState(1));
+                    chunk_materials.opaques.push(handle.clone());
+
+                    (0, handle, chunk_materials.opaques.len() - 1)
+                };
+
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
-                    MeshMaterial3d(materials.add(ChunkMaterial {
-                        model_buffer: shared_material_buffers.model_buffer.clone(),
-                        face_buffer,
-                        alpha_mode: AlphaMode::Opaque,
-                        textures: texture_buffer.0.clone(),
-                    })),
+                    MeshMaterial3d(material),
                     ChunkEntityType::Opaque,
                     Name::new("Opaque"),
+                    MeshTag(slot as u32),
+                    ChunkMaterialKey {
+                        is_opaque: true,
+                        slot: slot as u8,
+                        material: material_index as u16,
+                    },
                 ));
             }
 
@@ -650,17 +808,48 @@ pub fn join_mesh(
 
                 let face_buffer = shader_storage_buffers.add(face_buffer);
 
+                let (slot, material, material_index) = if let Some((slot, handle, material_index)) =
+                    chunk_materials.allocate_slot(false)
+                {
+                    let chunk_material = materials.get_mut(handle.id()).unwrap();
+
+                    if chunk_material.face_buffers.len() < (slot + 1) {
+                        chunk_material
+                            .face_buffers
+                            .resize(slot + 1, Handle::default());
+                    }
+
+                    chunk_material.face_buffers[slot] = face_buffer.clone();
+
+                    (slot, handle, material_index)
+                } else {
+                    let new_material = ChunkMaterial {
+                        model_buffer: shared_material_buffers.model_buffer.clone(),
+                        face_buffers: vec![face_buffer.clone()],
+                        alpha_mode: AlphaMode::Premultiplied,
+                        textures: texture_buffer.0.clone(),
+                    };
+
+                    let handle = materials.add(new_material);
+
+                    chunk_materials.transparent_states.push(ChunkFaceState(1));
+                    chunk_materials.transparents.push(handle.clone());
+
+                    (0, handle, chunk_materials.transparents.len() - 1)
+                };
+
                 chunk_entity.with_child((
                     aabb,
                     Mesh3d(mesh_handle),
-                    MeshMaterial3d(materials.add(ChunkMaterial {
-                        model_buffer: shared_material_buffers.model_buffer.clone(),
-                        face_buffer,
-                        alpha_mode: AlphaMode::Premultiplied,
-                        textures: texture_buffer.0.clone(),
-                    })),
+                    MeshMaterial3d(material),
                     ChunkEntityType::Transparent,
                     Name::new("Transparent"),
+                    MeshTag(slot as u32),
+                    ChunkMaterialKey {
+                        is_opaque: false,
+                        slot: slot as u8,
+                        material: material_index as u16,
+                    },
                 ));
             }
 

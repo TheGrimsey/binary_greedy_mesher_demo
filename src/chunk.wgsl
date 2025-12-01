@@ -15,7 +15,7 @@
 }
 #endif
 
-#import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip, mesh_normal_local_to_world}
+#import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip, mesh_normal_local_to_world, get_tag}
 #import bevy_pbr::pbr_functions::{calculate_view, prepare_world_normal}
 #import bevy_pbr::mesh_view_bindings
 #import bevy_pbr::mesh_bindings
@@ -26,7 +26,7 @@
 
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage, read> model_buffer: array<ModelQuad>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: array<Face>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: binding_array<ChunkFaceData>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var textures: binding_array<texture_2d<f32>>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(3) var nearest_sampler: sampler;
 
@@ -56,6 +56,10 @@ struct Face {
     texture_id: u32,
 }
 
+struct ChunkFaceData {
+    faces: array<Face>,
+}
+
 struct ModelQuad {
     positions: array<vec3<f32>, 4>,
     uv: array<vec2<f32>, 4>,
@@ -81,10 +85,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let first_vertex = mesh[vertex.instance_index].first_vertex_index;
     let vertex_index = vertex.index - first_vertex;
 
+    let tag = get_tag(vertex.instance_index);
+
     let face_id = vertex_index >> 2;
     let vertex_id = vertex_index & 3u;
 
-    let face = face_buffer[face_id];
+    let face = face_buffer[tag].faces[face_id];
     let model_quad = model_buffer[face.model_id];
 
     let vertex_position = model_quad.positions[vertex_id];

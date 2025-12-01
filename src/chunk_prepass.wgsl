@@ -13,7 +13,7 @@
 #import bevy_pbr::rgb9e5
 #endif
 
-#import bevy_pbr::mesh_functions::{mesh_normal_local_to_world}
+#import bevy_pbr::mesh_functions::{mesh_normal_local_to_world, get_tag}
 #import bevy_render::instance_index::{get_instance_index}
 
 struct Face {
@@ -25,6 +25,10 @@ struct Face {
     /// Index into the model buffer
     model_id: u32,
     texture_id: u32,
+}
+
+struct ChunkFaceData {
+    faces: array<Face>,
 }
 
 struct ModelQuad {
@@ -39,7 +43,7 @@ struct ModelQuad {
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage, read> model_buffer: array<ModelQuad>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: array<Face>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<storage, read> face_buffer: binding_array<ChunkFaceData>;
 
 fn x_positive_bits(bits: u32) -> u32{
     return (1u << bits) - 1u;
@@ -64,10 +68,12 @@ fn vertex(vertex: Vertex) -> MyVertexOutput {
     let first_vertex = mesh[vertex.instance_index].first_vertex_index;
     let vertex_index = vertex.index - first_vertex;
 
+    let tag = get_tag(vertex.instance_index);
+
     let face_id = vertex_index >> 2;
     let vertex_id = vertex_index & 3u;
 
-    let face = face_buffer[face_id];
+    let face = face_buffer[tag].faces[face_id];
     let model_quad = model_buffer[face.model_id];
 
     let vertex_position = model_quad.positions[vertex_id];
