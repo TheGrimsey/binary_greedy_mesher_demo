@@ -15,6 +15,7 @@ bevy = { version = "0.17", default-features = false, features = [
 ] }
 bracket-noise = "0.8.7"
 indexmap = "2.7.1"
+fixedbitset = "0.5"
 
 [dev-dependencies]
 bevy = { version = "0.17" }

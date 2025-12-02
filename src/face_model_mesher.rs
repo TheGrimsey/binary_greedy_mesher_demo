@@ -130,10 +130,7 @@ pub fn build_single_block_mesh(
 
     chunk_mesh.indices = generate_indices(chunk_mesh.faces.len());
 
-    let (mesh, faces) = chunk_mesh.to_bevy_mesh();
-
-    let mut face_buffer = ShaderStorageBuffer::from(faces);
-    face_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
+    let (mesh, face_buffer, _) = chunk_mesh.into_bevy_mesh();
 
     (mesh, face_buffer)
 }

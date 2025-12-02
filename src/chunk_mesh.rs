@@ -3,7 +3,10 @@ use bevy::{
     camera::primitives::Aabb,
     math::IVec3,
     mesh::{Indices, Mesh, MeshVertexAttribute, PrimitiveTopology},
-    render::render_resource::{ShaderType, VertexFormat},
+    render::{
+        render_resource::{ShaderType, VertexFormat},
+        storage::ShaderStorageBuffer,
+    },
 };
 
 use crate::utils::get_pos_from_vertex_u32;
@@ -20,7 +23,9 @@ pub struct ChunkMesh {
     pub faces: Vec<Face>,
 }
 impl ChunkMesh {
-    pub fn to_bevy_mesh(self) -> (Mesh, Vec<Face>) {
+    pub fn into_bevy_mesh(self) -> (Mesh, ShaderStorageBuffer, Aabb) {
+        let aabb = self.calculate_aabb();
+
         let mut bevy_mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::RENDER_WORLD,
@@ -34,7 +39,10 @@ impl ChunkMesh {
             std::iter::repeat_n(0, self.faces.len() * 4).collect::<Vec<u32>>(),
         );
 
-        (bevy_mesh, self.faces)
+        let mut faces_buffer = ShaderStorageBuffer::from(self.faces);
+        faces_buffer.asset_usage = RenderAssetUsages::RENDER_WORLD;
+
+        (bevy_mesh, faces_buffer, aabb)
     }
 
     pub fn calculate_aabb(&self) -> Aabb {
